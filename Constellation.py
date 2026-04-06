@@ -10,7 +10,7 @@ MU = 398600.4418         # 地球標準重力參數 (km^3/s^2)
 R = 6371.2    # SGP4 使用的地球半徑標準
 
 class Constellation:
-    def __init__(self, alt=540.0, inc=53.2, p=72, s=22, f=17, 
+    def __init__(self, alt=540.0, inc=53.2, p=4, s=4, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10,
                  packet_size_bits=80e6, broadcast_rate_bps=30e6,
@@ -23,13 +23,14 @@ class Constellation:
         self.f = f                   # 相位因子
         self.t = self.p * self.s                # 總共 1584 顆
         
-        self.sat_id = 1
+        self.sat_id = 0
         self.meo_id = 9999
 
         self.n_grids = n_grids
 
         self.agents = []
         self.user_grids = []
+        self.name_to_idx = {}
         self.meo_sat = None
 
         # --- MEO 參數 ---
@@ -121,6 +122,7 @@ class Constellation:
                 skyfield_sat = EarthSatellite.from_satrec(satrec, ts)
                 skyfield_sat.name = sat_name
                 sat_i = RelaySatellite(skyfield_sat)
+                self.name_to_idx[ sat_name ] = self.sat_id
                 
                 self.agents.append(sat_i)
                 self.sat_id += 1
@@ -184,7 +186,10 @@ class Constellation:
                     
                 self.user_grids.append(grid)
                 grid_id_counter += 1
-            
+
+    def get_id_by_name(self, name: str):
+        return self.name_to_idx[name]
+
     def get_neighbors(self, sat_id: int):
         # forward: (s+1) % N
         p = sat_id // self.s # plane id

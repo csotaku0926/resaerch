@@ -60,7 +60,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
     def reset(self, seed=None, options=None):
         """回合開始: 重置時間、位置、Buffer 與 DoF 進度"""
-        self.constellation.agents = self.constellation.agents[:]
+        self.agents = self.possible_agents[:]
+
         self.current_step = 0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0, tzinfo=timezone.utc)
         
@@ -69,8 +70,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         # 取得初始觀測值
         current_time = self.ts.from_datetime(self.start_dt)
-        observations = {agent.name: self._get_obs(i, current_time) for i, agent in enumerate(self.constellation.agents)}
-        infos = {agent.name: {} for agent in self.constellation.agents}
+        observations = {agent_name: self._get_obs(self.constellation.get_id_by_name(agent_name), 
+                                                  current_time) for agent_name in self.agents}
+        infos = {agent_name: {} for agent_name in self.agents}
         
         return observations, infos
 
@@ -89,11 +91,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # rewards = {i:-self.current_step for i in range(self.N)}
         rewards = {}
 
-        for i, agent_i in enumerate(self.constellation.agents):
-            name_i = agent_i.name
-            rewards[name_i] = -self.current_step
+        for agent_name in self.agents:
+            # name_i = agent_i.name
+            i = self.constellation.get_id_by_name(agent_name)
+            rewards[agent_name] = -self.current_step
             # 神經網路輸出的比例 (0~1)
-            action_probs = actions[name_i] # {"LEO_i": action}
+            action_probs = actions[agent_name] # {"LEO_i": action}
             
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
@@ -104,21 +107,21 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
                 actual_flow = min(desired_flows[j], contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
-                rewards[name_i] -= actual_flow
+                rewards[agent_name] -= actual_flow
                 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
             actual_flow = min(desired_flows[self.M], contact_capacity)
-            rewards[name_i] -= actual_flow
+            rewards[agent_name] -= actual_flow
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
-        all_done = self.check_all_grids_fulfilled()
-        terminations = {agent.name: all_done for agent in self.constellation.agents}
-        is_truncated = self.current_step >= self.T_max
-        truncations = {agent.name: is_truncated for agent in self.constellation.agents} # 是否超時
+        all_done = bool(self.check_all_grids_fulfilled())
+        terminations = {agent_name: all_done for agent_name in self.agents}
+        is_truncated = bool(self.current_step >= self.T_max)
+        truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         
         # 5. 更新狀態
         self.current_step += 1
@@ -126,11 +129,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         next_time = self.ts.utc(next_dt.year, next_dt.month, next_dt.day,
                                    next_dt.hour, next_dt.minute, next_dt.second)
         
-        observations = {agent.name: self._get_obs(i, next_time) for i, agent in enumerate(self.constellation.agents)}
-        infos = {agent.name: {} for agent in self.constellation.agents}
+        observations = {agent_name: self._get_obs(i, next_time) for i, agent_name in enumerate(self.agents)}
+        infos = {agent_name: {} for agent_name in self.agents}
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
-        if all_done:
+        if all_done or is_truncated:
             self.agents = []
 
         return observations, rewards, terminations, truncations, infos
