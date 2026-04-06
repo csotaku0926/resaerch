@@ -247,6 +247,9 @@ class Constellation:
 
     def get_leo_buffer(self, agent_id):
         return self.agents[agent_id].get_buffer()   
+    
+    def get_leo_max_buffer(self):
+        return self.agents[0].get_max_buffer()
 
     def transfer_buffer(self, sat_id, neighbor, amount):
         self.agents[sat_id].buffer -= amount

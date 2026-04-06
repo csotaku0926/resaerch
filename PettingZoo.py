@@ -22,6 +22,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.M = num_neighbors  # 鄰居數量 (Intra-tier)
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)
         self.N = len(self.constellation.agents)
+        self.Tw = 2             # time window for contact volume
         
         # 2. 定義動作空間 (Action Space) - 連續變數
         # 每個 LEO 輸出一個長度為 M+1 的陣列，範圍 [0, 2]，代表流量分配比例
@@ -126,13 +127,25 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         global_teg_state = ...    # 全局接觸圖的容量
         return np.concatenate([global_buffer_state, global_teg_state])
 
-    def _get_obs(self, agent_id):
+    def _get_obs(self, agent_id, current_time):
         """計算局部觀測值給 Actor"""
         # (buf state of self, contact volume: 4)
-        # my buf
+        # ==========================================
+        # 特徵 1: 自己的 Buffer (1 維)
+        # ==========================================
         buf = self.constellation.get_leo_buffer(agent_id)
+        max_buf = self.constellation.get_leo_max_buffer()
+        norm_buf = np.clip(buf / max_buf, 0.0, 1.0)
 
+        # ==========================================
+        # 特徵 2: 鄰居的 Buffer 與 ISL Volume (2 * M 維)
+        # ==========================================
         neighbor_bufs = []
+
+        for j in self.constellation.get_neighbors(agent_id):
+            buf_j = self.constellation.get_leo_buffer(j)
+            norm_buf_j = np.clip(buf_j / max_buf, 0.0, 1.0)
+            neighbor_bufs.append()
 
 
     def check_all_grids_fulfilled(self):

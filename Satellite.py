@@ -13,14 +13,17 @@ class RelaySatellite:
     def __init__(self, skyfield_sat: EarthSatellite):
         self.skyfield_sat = skyfield_sat  # 底層的物理衛星物件
         self.name = skyfield_sat.name
-        self.buffer = 0          # 肚子裡有多少個 NC 封包 (Degrees of Freedom)
-        self.max_buffer = 1000   # 緩存上限
+        self.buffer = 0.0          # 肚子裡有多少個 NC 封包 (Degrees of Freedom)
+        self.max_buffer = 1000.0   # 緩存上限
         
     def get_pos(self, t):
         return self.skyfield_sat.at(t).position.km
     
     def get_buffer(self):
         return self.buffer
+    
+    def get_max_buffer(self):
+        return self.max_buffer
     
     def leo_to_leo(self, t, leo_b):
         if (self.buffer <= 0): return
