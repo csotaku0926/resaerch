@@ -362,6 +362,49 @@ class Constellation:
    
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
+    
+    def get_teg_downlink_volume(self, agent_id: int, grid_idx: int, current_time):
+        """
+        真正的 TEG Contact Volume (時效性總量)
+        往未來推演，計算這顆衛星離開這個網格前，"總共"還能砸下多少有效封包。
+        """
+        total_teg_volume = 0.0
+        
+        # 為了避免 RL 訓練時跑太慢，設定最大推演步數 (例如 60 步 = 未來 10 分鐘)
+        MAX_LOOKAHEAD_STEPS = 60 
+        
+        sat = self.agents[agent_id]
+        target_grid = self.user_grids[grid_idx]
+        
+        for future_step in range(MAX_LOOKAHEAD_STEPS):
+            # 1. 時間往未來推進
+            future_dt = current_time.utc_datetime() + timedelta(seconds=future_step * self.step_seconds)
+            future_t = self.ts.utc(future_dt.year, future_dt.month, future_dt.day, 
+                                future_dt.hour, future_dt.minute, future_dt.second)
+            
+            # 2. 取得未來的仰角
+            difference = sat.skyfield_sat - target_grid.center_position
+            alt, _, distance = difference.at(future_t).altaz()
+            elevation_deg = alt.degrees
+            
+            # 3. 判斷未來這個時間點是否已經斷線 (TEG Edge 壽命結束)
+            if elevation_deg < 15.0:
+                break # 飛出去了，這條邊的未來容量歸零，結束推演
+                
+            # 4. 如果沒斷線，計算未來這一個 step 的「有效容量」並累加
+            raw_cap = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
+            
+            # (這裡借用你寫好的物理公式，算最慘掉包率)
+            worst_erasure = 0.0
+            for user in target_grid.users:
+                e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
+                if e_rate > worst_erasure:
+                    worst_erasure = e_rate
+                    
+            expected_goodput = raw_cap * (1.0 - worst_erasure)
+            total_teg_volume += expected_goodput
+            
+        return total_teg_volume
 
 def main():
     C = Constellation()
