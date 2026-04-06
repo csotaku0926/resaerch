@@ -16,6 +16,14 @@ class RelaySatellite:
         self.buffer = 0.0          # 肚子裡有多少個 NC 封包 (Degrees of Freedom)
         self.max_buffer = 1000.0   # 緩存上限
         
+    def recv(self, amount:int):
+        self.buffer = min(self.buffer + amount, self.max_buffer)
+
+    def send(self, amount:int):
+        real_amount = min(amount, self.buffer)
+        self.buffer -= real_amount
+        return real_amount
+        
     def get_pos(self, t):
         return self.skyfield_sat.at(t).position.km
     
@@ -25,8 +33,5 @@ class RelaySatellite:
     def get_max_buffer(self):
         return self.max_buffer
     
-    def leo_to_leo(self, t, leo_b):
-        if (self.buffer <= 0): return
-
-        # 判斷 LEO b 是否可連線
-        dist = np.linalg.norm(self.get_pos(t) - leo_b.get_pos(t))
+    def reset(self):
+        self.buffer = 0

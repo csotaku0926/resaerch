@@ -25,6 +25,9 @@ class User:
     def recv(self, amount:int):
         self.received_count = min(self.received_count + amount, self.target_k)
 
+    def reset(self):
+        self.received_count = 0
+
 
 # 實作邏輯：定義目標區域
 class GroundGrid:
@@ -40,16 +43,20 @@ class GroundGrid:
 
         self.users = []
 
-    def get_user_total_recv(self):
+    def get_user_total_recv(self) -> list[int]:
         miss_lst = [user.received_count for user in self.users]
+        return miss_lst
+    
+    def get_user_fulfill(self) -> int:
+        miss_lst = [(user.received_count >= self.target_k) for user in self.users]
         return sum(miss_lst)
     
-    def get_user_total_target(self):
-        miss_lst = [user.target_k for user in self.users]
-        return sum(miss_lst)
-    
-    def get_user_count(self):
+    def get_user_count(self) -> int:
         return len(self.users)
+    
+    def reset(self):
+        for i in range(len(self.users)):
+            self.users[i].reset()
 
 
 def main():

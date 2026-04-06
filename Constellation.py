@@ -3,6 +3,7 @@ from skyfield.api import load, EarthSatellite
 from Satellite import *
 from GroundGrid import *
 from sgp4.api import Satrec, WGS72
+from datetime import datetime, timedelta
 
 # 物理常數
 MU = 398600.4418         # 地球標準重力參數 (km^3/s^2)
@@ -29,6 +30,7 @@ class Constellation:
 
         self.agents = []
         self.user_grids = []
+        self.meo_sat = None
 
         # --- MEO 參數 ---
         self.meo_alt = meo_alt
@@ -38,9 +40,11 @@ class Constellation:
         MEO_A = R + self.meo_alt
 
         # communication param
+        self.meo_tx_rate_bps = 100e6 # 100 Mbps
         self.packet_size_bits = packet_size_bits
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
+        self.target_k = 100
 
         # 這裡使用簡化的通訊參數
         self.s_freq_hz = 2e9    # S-band 2GHz (for user erasure)
@@ -65,7 +69,15 @@ class Constellation:
 
         # ------------ build constellation ------------------
         self.build_constellation()
-        self.initialize_roi()
+        self.initialize_roi(target_k=self.target_k)
+
+    def reset(self):
+        """reset whole constellation (buffer state, inital position)"""
+        for i in range(len(self.agents)):
+            self.agents[i].reset()
+
+        for i in range(len(self.user_grids)):
+            self.user_grids[i].reset()
 
     def build_constellation(self):
         # 載入時間系統
@@ -128,11 +140,11 @@ class Constellation:
         )
 
         meo_name = "MEO_Data_Source"
-        self.meo_sat = EarthSatellite.from_satrec(satrec_meo, ts)
+        meo_sat = EarthSatellite.from_satrec(satrec_meo, ts)
+        self.meo_sat = MEOSatellite(meo_sat)
         self.meo_sat.name = meo_name
-        meo_i = MEOSatellite(self.meo_sat)
 
-        self.agents.append(meo_i)
+        # self.agents.append(meo_i)
 
         print(f"成功將 {len(self.agents)} 顆完美 Walker 衛星實體化為 Skyfield 物件！")
 
@@ -186,7 +198,7 @@ class Constellation:
         return [forward, backward, left, right]
 
     def is_leo_visible_to_meo(self, t, ISL_max_range=10000):
-        # 取得 MEO 座標
+        """get visible LEO to MEO source"""
         meo_pos = self.meo_sat.at(t).position.km
         
         candidates = []
@@ -251,9 +263,46 @@ class Constellation:
     def get_leo_max_buffer(self):
         return self.agents[0].get_max_buffer()
 
-    def transfer_buffer(self, sat_id, neighbor, amount):
-        self.agents[sat_id].buffer -= amount
-        self.agents[neighbor].buffer += amount 
+    def transfer_buffer(self, neighbor, amount, sat_id=None):
+        """sat_id=None --> MEO transfer"""
+        if (sat_id is not None): self.agents[sat_id].send(amount)
+        self.agents[neighbor].recv(amount) 
+
+    def meo_broadcast_to_leos(self, current_time):
+        """
+        MEO 作為 Source, 將封包廣播給視距內的 LEOs
+        """
+        # 1. 定義 MEO 的發射能力 (假設 MEO 的頻寬比較大)
+        # meo_tx_rate_bps = 100e6  # 100 Mbps
+        # packet_size_bits = 80e6  # 10 MB = 80 Mbits (跟你 LEO 的設定一樣)
+        
+        # 算出 MEO 在這 10 秒內，總共噴了多少個封包 (DoF)
+        meo_total_packets = (self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
+
+        # 2. 掃描所有的 LEO (Agents)
+        for i, agent_id in enumerate(self.agents):
+            leo_sat = self.agents[agent_id].skyfield_sat # 取得 Skyfield 物件
+            meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
+            
+            # 3. 檢查視距 (Line of Sight) 與仰角
+            # 計算 MEO 看 LEO 的相對位置
+            difference = leo_sat - meo_sat
+            topocentric = difference.at(current_time)
+            alt, az, distance = topocentric.altaz()
+            
+            # 如果 MEO 看 LEO 的仰角大於 0 度 (或者你設定的 min_elevation)
+            # 代表訊號沒有被地球擋住
+            if alt.degrees > 15:
+                # 4. 計算 MEO -> LEO 的掉包率 (Erasure Rate)
+                # 這裡你可以根據 distance.km 寫一個簡單的 SNR 轉換公式，或是給定一個常數
+                # e_rate = self.calculate_meo_to_leo_erasure(distance.km)
+                
+                # 5. 計算 LEO 實際成功收到的封包數
+                # 廣播優勢：每個 LEO 都是獨立去骰這個掉包率
+                actual_received_packets = meo_total_packets #* (1.0 - e_rate)
+                
+                # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
+                self.transfer_buffer(neighbor=i, amount=actual_received_packets)
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
             sat = self.agents[agent_id]
@@ -280,7 +329,7 @@ class Constellation:
 
     def calculate_erasure_rate(self, agent_id: int, user: User, current_time):
         """
-        基於 LEO 衛星幾何與路徑損失的連續異質抹除率計算 (無武斷的 if-else)
+        基於 LEO 衛星幾何與路徑損失的連續異質抹除率計算 (link quality)
         """
         sat = self.agents[agent_id]
         difference = sat - user.pos
@@ -350,61 +399,48 @@ class Constellation:
                 
                 self.user_grids[ui].recv(received)
 
-    def get_total_received(self):
-        # GroundGrid.get_user_total_recv
-        total = sum([ m.get_user_total_recv() for m in self.user_grids])
-        return total
-    
-    def get_total_target(self):
-        # GroundGrid.get_user_total_recv
-        total = sum([ m.get_user_total_target() for m in self.user_grids])
-        return total
+    def get_user_fulfill_percent(self) -> float:
+        # return the percentage
+        ful_cnt = 0
+        user_cnt = 0
+
+        for grid in self.user_grids:
+            ful_cnt += grid.get_user_fulfill()
+            user_cnt += grid.get_user_count()
+        return ful_cnt / user_cnt
    
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
     
-    def get_teg_downlink_volume(self, agent_id: int, grid_idx: int, current_time):
+    def get_teg_downlink_volume(self, agent_id: int, covered_grids:list, n_time_window: int, current_time) -> list[int]:
         """
         真正的 TEG Contact Volume (時效性總量)
         往未來推演，計算這顆衛星離開這個網格前，"總共"還能砸下多少有效封包。
         """
-        total_teg_volume = 0.0
+        teg_vector = []
+    
+        # sat = self.agents[agent_id]
+        # covered_grids = self.get_visible_grids(agent_id, current_time)
         
-        # 為了避免 RL 訓練時跑太慢，設定最大推演步數 (例如 60 步 = 未來 10 分鐘)
-        MAX_LOOKAHEAD_STEPS = 60 
-        
-        sat = self.agents[agent_id]
-        target_grid = self.user_grids[grid_idx]
-        
-        for future_step in range(MAX_LOOKAHEAD_STEPS):
+        for future_step in range(n_time_window):
             # 1. 時間往未來推進
             future_dt = current_time.utc_datetime() + timedelta(seconds=future_step * self.step_seconds)
             future_t = self.ts.utc(future_dt.year, future_dt.month, future_dt.day, 
                                 future_dt.hour, future_dt.minute, future_dt.second)
             
             # 2. 取得未來的仰角
-            difference = sat.skyfield_sat - target_grid.center_position
-            alt, _, distance = difference.at(future_t).altaz()
-            elevation_deg = alt.degrees
-            
-            # 3. 判斷未來這個時間點是否已經斷線 (TEG Edge 壽命結束)
-            if elevation_deg < 15.0:
-                break # 飛出去了，這條邊的未來容量歸零，結束推演
-                
-            # 4. 如果沒斷線，計算未來這一個 step 的「有效容量」並累加
-            raw_cap = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
-            
-            # (這裡借用你寫好的物理公式，算最慘掉包率)
-            worst_erasure = 0.0
-            for user in target_grid.users:
-                e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
-                if e_rate > worst_erasure:
-                    worst_erasure = e_rate
+            avg_ratio = 0.0
+            for target_grid in covered_grids: 
+                # (這裡借用你寫好的物理公式，算平均掉包率)
+                for user in target_grid.users:
+                    e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
+                    avg_ratio += (1.0 - e_rate)
+                avg_ratio /= len(target_grid.users)
+            avg_ratio /= len(covered_grids)
                     
-            expected_goodput = raw_cap * (1.0 - worst_erasure)
-            total_teg_volume += expected_goodput
+            teg_vector.append(avg_ratio)
             
-        return total_teg_volume
+        return teg_vector
 
 def main():
     C = Constellation()
