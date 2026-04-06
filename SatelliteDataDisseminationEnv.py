@@ -1,7 +1,7 @@
 import numpy as np
 from pettingzoo.utils.env import ParallelEnv
 from gymnasium.spaces import Box, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from skyfield.api import load
 from Constellation import Constellation
 
@@ -23,20 +23,20 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.N = len(self.constellation.agents)
 
         # 加入這兩行 (PettingZoo 鐵規則)
-        self.possible_agents = self.constellation.agents[:]
+        self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
         self.agents = self.possible_agents[:]
 
         # 2. 定義動作空間 (Action Space) - 連續變數
         # 每個 LEO 輸出一個長度為 M+1 的陣列，範圍 [0, 1]，代表流量分配比例
         self.action_spaces = {
-            agent: Box(low=0.0, high=1.0, shape=(self.M + 1), dtype=np.float32)
+            agent.name: Box(low=0.0, high=1.0, shape=(self.M + 1,), dtype=np.float32)
             for agent in self.constellation.agents
         }
         
         # 3. 定義觀測空間 (Observation Space) - 局部視角 (給 Actor 用)
         # 包含：自身 Buffer(1), 鄰居 Contact Volume(M), 地面 Contact Volume(G) (我自己可以送多少)
         self.observation_spaces = {
-            agent: Dict({
+            agent.name: Dict({
                 # 1. 庫存純量 (5 維)：[自己, 鄰居1, 鄰居2, 鄰居3, 鄰居4]
                 "buffers": Box(low=0.0, high=1.0, shape=(1 + self.M,), dtype=np.float32),
                 
@@ -62,15 +62,15 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         """回合開始: 重置時間、位置、Buffer 與 DoF 進度"""
         self.constellation.agents = self.constellation.agents[:]
         self.current_step = 0
-        self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
+        self.start_dt = datetime(2026, 4, 1, 0, 0, 0, tzinfo=timezone.utc)
         
         # 這裡重置你的 LEO buffers 與地面的 received_dof
         self.constellation.reset()
         
         # 取得初始觀測值
         current_time = self.ts.from_datetime(self.start_dt)
-        observations = {agent: self._get_obs(agent, current_time) for agent in self.constellation.agents}
-        infos = {agent: {} for agent in self.constellation.agents}
+        observations = {agent.name: self._get_obs(i, current_time) for i, agent in enumerate(self.constellation.agents)}
+        infos = {agent.name: {} for agent in self.constellation.agents}
         
         return observations, infos
 
@@ -86,11 +86,14 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.constellation.meo_broadcast_to_leos(current_time)
 
         # 3. 計算 Reward (獎勵設計)
-        rewards = {i:-self.current_step for i in range(self.N)}
+        # rewards = {i:-self.current_step for i in range(self.N)}
+        rewards = {}
 
         for i, agent_i in enumerate(self.constellation.agents):
+            name_i = agent_i.name
+            rewards[name_i] = -self.current_step
             # 神經網路輸出的比例 (0~1)
-            action_probs = actions[i] # [X_ISL_1, X_ISL_2, X_ISL_3, X_ISL_4, X_DL]
+            action_probs = actions[name_i] # {"LEO_i": action}
             
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
@@ -101,21 +104,21 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
                 actual_flow = min(desired_flows[j], contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
-                rewards[i] -= actual_flow
+                rewards[name_i] -= actual_flow
                 
             # Inter-tier (給地面)
-            actual_flow = min(desired_flows[self.M], contact_capacity)
-            rewards[i] -= actual_flow
-            # for g in range(self.constellation.get_visible_grids(i)):
             contact_capacity = self.constellation.get_downlink_capacity()
+            actual_flow = min(desired_flows[self.M], contact_capacity)
+            rewards[name_i] -= actual_flow
+            # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         all_done = self.check_all_grids_fulfilled()
-        terminations = {agent: all_done for agent in self.constellation.agents}
+        terminations = {agent.name: all_done for agent in self.constellation.agents}
         is_truncated = self.current_step >= self.T_max
-        truncations = {agent: is_truncated for agent in self.constellation.agents} # 是否超時
+        truncations = {agent.name: is_truncated for agent in self.constellation.agents} # 是否超時
         
         # 5. 更新狀態
         self.current_step += 1
@@ -123,12 +126,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         next_time = self.ts.utc(next_dt.year, next_dt.month, next_dt.day,
                                    next_dt.hour, next_dt.minute, next_dt.second)
         
-        observations = {agent: self._get_obs(agent, next_time) for agent in self.constellation.agents}
-        infos = {agent: {} for agent in self.constellation.agents}
+        observations = {agent.name: self._get_obs(i, next_time) for i, agent in enumerate(self.constellation.agents)}
+        infos = {agent.name: {} for agent in self.constellation.agents}
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
         if all_done:
-            self.constellation.agents = []
+            self.agents = []
 
         return observations, rewards, terminations, truncations, infos
 
@@ -179,18 +182,21 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # ==========================================
         # 特徵 2:  Contact Volume (5 * T 維)
         # ==========================================
-        contact_volumes = []
+        cv_matrix = np.zeros((1 + self.M, self.Tw), dtype=np.float32)
         covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
+        
         my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
-        contact_volumes.append(my_teg)
-
-        for j in self.constellation.get_neighbors(agent_id):
+        # 填入自己對地的 TEG
+        cv_matrix[0, :] = my_teg
+        
+        # 填入鄰居的 TEG
+        for idx, j in enumerate(self.constellation.get_neighbors(agent_id)):
             teg_j = self.constellation.get_teg_downlink_volume(j, covered_grids, self.Tw, current_time)
-            contact_volumes.append(teg_j)
+            cv_matrix[idx + 1, :] = teg_j
 
         return {
             "buffers": np.array(bufs, dtype=np.float32),
-            "contact_volumes": np.array(contact_volumes, dtype=np.float32)
+            "contact_volumes": cv_matrix
         }
 
     def check_all_grids_fulfilled(self):

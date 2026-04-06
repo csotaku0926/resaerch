@@ -187,7 +187,7 @@ class Constellation:
             
     def get_neighbors(self, sat_id: int):
         # forward: (s+1) % N
-        p = sat_id / self.s # plane id
+        p = sat_id // self.s # plane id
         s = sat_id % self.s # sat id in plane
         
         forward = p * self.s + ((s + 1) % self.s)
@@ -214,6 +214,9 @@ class Constellation:
         return candidates
     
     def get_ISL_capacity(self, agent1_id:int, agent2_id:int, current_time, MAX_ISL_DISTANCE=5000.0):
+        
+        if (agent1_id == agent2_id): return 0
+        
         sat1 = self.agents[agent1_id]
         sat2 = self.agents[agent2_id]
 
@@ -268,7 +271,7 @@ class Constellation:
         if (sat_id is not None): self.agents[sat_id].send(amount)
         self.agents[neighbor].recv(amount) 
 
-    def meo_broadcast_to_leos(self, current_time):
+    def meo_broadcast_to_leos(self, current_time, max_dist=15000):
         """
         MEO 作為 Source, 將封包廣播給視距內的 LEOs
         """
@@ -280,23 +283,23 @@ class Constellation:
         meo_total_packets = (self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
 
         # 2. 掃描所有的 LEO (Agents)
-        for i, agent_id in enumerate(self.agents):
-            leo_sat = self.agents[agent_id].skyfield_sat # 取得 Skyfield 物件
+        for i, agent in enumerate(self.agents):
+            leo_sat = agent.skyfield_sat # 取得 Skyfield 物件
             meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
             
             # 3. 檢查視距 (Line of Sight) 與仰角
             # 計算 MEO 看 LEO 的相對位置
             difference = leo_sat - meo_sat
-            topocentric = difference.at(current_time)
-            alt, az, distance = topocentric.altaz()
+            # topocentric = difference.at(current_time)
+            distance_km = difference.at(current_time).distance().km
             
             # 如果 MEO 看 LEO 的仰角大於 0 度 (或者你設定的 min_elevation)
             # 代表訊號沒有被地球擋住
-            if alt.degrees > 15:
+            if distance_km < max_dist:
                 # 4. 計算 MEO -> LEO 的掉包率 (Erasure Rate)
                 # 這裡你可以根據 distance.km 寫一個簡單的 SNR 轉換公式，或是給定一個常數
                 # e_rate = self.calculate_meo_to_leo_erasure(distance.km)
-                
+                    
                 # 5. 計算 LEO 實際成功收到的封包數
                 # 廣播優勢：每個 LEO 都是獨立去骰這個掉包率
                 actual_received_packets = meo_total_packets #* (1.0 - e_rate)
@@ -305,19 +308,19 @@ class Constellation:
                 self.transfer_buffer(neighbor=i, amount=actual_received_packets)
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
-            sat = self.agents[agent_id]
-            visible_grid_idx = []
+        sat = self.agents[agent_id].skyfield_sat
+        visible_grid_idx = []
+        
+        # 掃描所有的 GroundGrid
+        for i, grid in enumerate(self.user_grids):
+            difference = sat - grid.center_position # wgs84.latlon...
+            alt, _, _ = difference.at(current_time).altaz()
             
-            # 掃描所有的 GroundGrid
-            for i, grid in enumerate(self.user_grids):
-                difference = sat - grid.center_position # wgs84.latlon...
-                alt, _, _ = difference.at(current_time).altaz()
+            # 如果仰角 > 15 度，代表波束涵蓋到了這個網格
+            if alt.degrees >= 15.0:
+                visible_grid_idx.append(i)
                 
-                # 如果仰角 > 15 度，代表波束涵蓋到了這個網格
-                if alt.degrees >= 15.0:
-                    visible_grid_idx.append(i)
-                    
-            return visible_grid_idx
+        return visible_grid_idx
     
     def get_downlink_capacity(self):
         
@@ -331,7 +334,7 @@ class Constellation:
         """
         基於 LEO 衛星幾何與路徑損失的連續異質抹除率計算 (link quality)
         """
-        sat = self.agents[agent_id]
+        sat = self.agents[agent_id].skyfield_sat
         difference = sat - user.pos
         alt, _, distance = difference.at(current_time).altaz()
         
@@ -381,12 +384,12 @@ class Constellation:
         return float(final_erasure)
 
     def download_to_grid(self, agent_id:int, amount, current_time):
-        grid_is = self.get_visible_grids()
+        grid_is = self.get_visible_grids(agent_id, current_time)
 
         # sat = self.agents[agent_id]
         # --- 3. 異質化接收發生在這裡！ ---
         for g_idx in grid_is:
-            for ui, user in enumerate(self.user_grids[ui]):
+            for ui, user in enumerate(self.user_grids[g_idx].users):
                 # 算出自己的漏水率
                 # User A 在中心，erasure_rate = 0.05
                 # User B 在邊緣，erasure_rate = 0.40
@@ -397,7 +400,7 @@ class Constellation:
                 # User B: np.random.binomial(37, 0.60) -> 可能只收到 22 滴
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
-                self.user_grids[ui].recv(received)
+                self.user_grids[g_idx].users[ui].recv(received)
 
     def get_user_fulfill_percent(self) -> float:
         # return the percentage
@@ -412,7 +415,7 @@ class Constellation:
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
     
-    def get_teg_downlink_volume(self, agent_id: int, covered_grids:list, n_time_window: int, current_time) -> list[int]:
+    def get_teg_downlink_volume(self, agent_id: int, covered_grids:list[int], n_time_window: int, current_time) -> list[int]:
         """
         真正的 TEG Contact Volume (時效性總量)
         往未來推演，計算這顆衛星離開這個網格前，"總共"還能砸下多少有效封包。
@@ -421,21 +424,26 @@ class Constellation:
     
         # sat = self.agents[agent_id]
         # covered_grids = self.get_visible_grids(agent_id, current_time)
+        if (len(covered_grids) == 0):
+            return [0] * n_time_window
         
         for future_step in range(n_time_window):
             # 1. 時間往未來推進
+            ts = load.timescale()
             future_dt = current_time.utc_datetime() + timedelta(seconds=future_step * self.step_seconds)
-            future_t = self.ts.utc(future_dt.year, future_dt.month, future_dt.day, 
+            future_t = ts.utc(future_dt.year, future_dt.month, future_dt.day, 
                                 future_dt.hour, future_dt.minute, future_dt.second)
             
             # 2. 取得未來的仰角
             avg_ratio = 0.0
-            for target_grid in covered_grids: 
+            for gi in covered_grids: 
+                grid = self.user_grids[gi]
                 # (這裡借用你寫好的物理公式，算平均掉包率)
-                for user in target_grid.users:
+                for user in grid.users:
                     e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
                     avg_ratio += (1.0 - e_rate)
-                avg_ratio /= len(target_grid.users)
+                avg_ratio /= len(grid.users)
+            
             avg_ratio /= len(covered_grids)
                     
             teg_vector.append(avg_ratio)
