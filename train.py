@@ -92,10 +92,12 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
-        # 如果因為 current_step >= T_max 而結束，代表有人超時了 (Truncated)
-        # 你可以根據 infos 或是 step 的回傳來更精確判定，這裡簡單判定回合長度
-        is_timeout = 1.0 if episode.length >= self.T_max else 0.0
-        episode.custom_metrics["episode_cost"] = is_timeout
+        # 讀取環境最後一步回傳的 is_violation
+        last_info = episode.last_info_for(episode.get_agents()[0])
+        
+        # 如果最後任務沒解完，就把這一局標記為「Cost = 1」
+        violation_flag = last_info.get("is_violation", 0.0) if last_info else 0.0
+        episode.custom_metrics["episode_cost"] = violation_flag
 
     def on_train_result(self, *, algorithm, result, **kwargs):
         if "custom_metrics" in result and "episode_cost_mean" in result["custom_metrics"]:

@@ -136,6 +136,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         is_done = all_done or is_truncated
         terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
+        is_violation = 1.0 if (is_truncated and not all_done) else 0.0
         
         # 5. 更新狀態
         self.current_step += 1
@@ -152,7 +153,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             "global_state" : current_global_state 
             } for agent_name in self.agents
         }
-        infos = {agent_name: {} for agent_name in self.agents}
+        infos = {agent_name: {"is_violation" : is_violation} for agent_name in self.agents}
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
         # if all_done or is_truncated:
