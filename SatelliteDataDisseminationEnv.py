@@ -155,8 +155,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         infos = {agent_name: {} for agent_name in self.agents}
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
-        if all_done or is_truncated:
-            self.agents = []
+        # if all_done or is_truncated:
+        #     self.agents = []
 
         return observations, rewards, terminations, truncations, infos
 
