@@ -37,13 +37,20 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 包含：自身 Buffer(1), 鄰居 Contact Volume(M), 地面 Contact Volume(G) (我自己可以送多少)
         self.observation_spaces = {
             agent.name: Dict({
-                # 1. 庫存純量 (5 維)：[自己, 鄰居1, 鄰居2, 鄰居3, 鄰居4]
-                "buffers": Box(low=0.0, high=1.0, shape=(1 + self.M,), dtype=np.float32),
+                "local_obs": Dict({
+                    # 1. 庫存純量 (5 維)：[自己, 鄰居1, 鄰居2, 鄰居3, 鄰居4]
+                    "buffers": Box(low=0.0, high=1.0, shape=(1 + self.M,), dtype=np.float32),
                 
-                # 2. 接觸圖容量矩陣 (5 x T 維)
-                # Row 0: 對地廣播的未來 T 步
-                # Row 1~4: 給四個鄰居 ISL 的未來 T 步
-                "contact_volumes": Box(low=0.0, high=1.0, shape=(1 + self.M, self.Tw), dtype=np.float32)
+                    # 2. 接觸圖容量矩陣 (5 x T 維)
+                    # Row 0: 對地廣播的未來 T 步
+                    # Row 1~4: 給四個鄰居 ISL 的未來 T 步
+                    "contact_volumes": Box(low=0.0, high=1.0, shape=(1 + self.M, self.Tw), dtype=np.float32)
+                }), 
+                # 3. Global State (N) 
+                "global_state": Dict({
+                    "buffers": Box(low=0.0, high=1.0, shape=(self.N,), dtype=np.float32),
+                    "contact_volumes": Box(low=0.0, high=1.0, shape=(self.N, self.Tw), dtype=np.float32)
+                }) 
             })
             for agent in self.constellation.agents
         }
@@ -69,9 +76,15 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.constellation.reset()
         
         # 取得初始觀測值
+        # 【效能優化】：在這裡統一算一次全局狀態
+        current_global_state = self.state()
         current_time = self.ts.from_datetime(self.start_dt)
-        observations = {agent_name: self._get_obs(self.constellation.get_id_by_name(agent_name), 
-                                                  current_time) for agent_name in self.agents}
+        observations = {
+            agent_name: {
+            "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), current_time),
+            "global_state" : current_global_state 
+            } for agent_name in self.agents
+        }
         infos = {agent_name: {} for agent_name in self.agents}
         
         return observations, infos
@@ -129,7 +142,15 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         next_time = self.ts.utc(next_dt.year, next_dt.month, next_dt.day,
                                    next_dt.hour, next_dt.minute, next_dt.second)
         
-        observations = {agent_name: self._get_obs(i, next_time) for i, agent_name in enumerate(self.agents)}
+        # 【效能優化】：在這裡統一算一次全局狀態
+        current_global_state = self.state()
+        
+        observations = {
+            agent_name: {
+            "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), next_time),
+            "global_state" : current_global_state 
+            } for agent_name in self.agents
+        }
         infos = {agent_name: {} for agent_name in self.agents}
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
@@ -150,22 +171,34 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         current_time = self.ts.utc(current_dt.year, current_dt.month, current_dt.day,
                                    current_dt.hour, current_dt.minute, current_dt.second)
         
-        global_state = []
-
-        # 1. 收集全網所有衛星的 Buffer
+        global_buf = []
         max_buf = self.constellation.get_leo_max_buffer()
-        for agent_id in self.agents:
-            buf = self.constellation.get_leo_buffer(agent_id)
-            global_state.append(np.clip(buf / max_buf, 0.0, 1.0))
 
-        # 2. 收集全網所有衛星對地的未來 T 步接觸容量 (TEG)
-        for agent_id in self.agents:
-            covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
-            # 這裡回傳的 my_teg 應該是一個長度為 self.Tw 的 list 或 array
-            my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
-            global_state.extend(my_teg)
+        # 1. 收集全網所有衛星的 Buffer (slow)
+        for agent_name in self.possible_agents:
+            if agent_name in self.agents:
+                agent_id = self.constellation.get_id_by_name(agent_name)
+                buf = self.constellation.get_leo_buffer(agent_id)
+                global_buf.append(np.clip(buf / max_buf, 0.0, 1.0))
+            else:
+                global_buf.append(0.0)
 
-        return np.array(global_state, dtype=np.float32)
+        # 2. 收集全網所有衛星的 TEG (永遠掃描 possible_agents)
+        global_cv = []
+        for agent_name in self.possible_agents:
+            if agent_name in self.agents:
+                agent_id = self.constellation.get_id_by_name(agent_name)
+                covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
+                my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
+                global_cv.extend(my_teg)
+            else:
+                global_cv.extend([0.0] * self.Tw) # 死掉就補連續的 0
+
+        # return np.array(global_state, dtype=np.float32)
+        return {
+            "buffers": np.array(global_buf, dtype=np.float32),
+            "contact_volumes": np.array(global_cv, dtype=np.float32)
+        }
 
     def _get_obs(self, agent_id, current_time):
         """計算局部觀測值給 Actor"""
