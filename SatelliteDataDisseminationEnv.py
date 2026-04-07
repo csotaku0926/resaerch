@@ -8,12 +8,12 @@ from Constellation import Constellation
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, num_neighbors=4, num_grids=1):
+    def __init__(self, num_neighbors=4, num_grids=1, T_max=90):
         super().__init__()
 
         # 1. 定義 param
         self.e = 0.2            # reliability constraint: Pr(T > T_max) <= e
-        self.T_max = 90         # max time step (truncation)
+        self.T_max = T_max         # max time step (truncation)
         
         self.M = num_neighbors  # 鄰居數量 (Intra-tier)
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)

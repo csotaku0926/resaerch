@@ -82,13 +82,14 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
+T_MAX = 10
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
         self.lambda_weight = 0.0  
         self.target_e = 0.2       # 超時率必須 <= 20%
         self.lr_lambda = 0.01     
-        self.T_max = 90
+        self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 如果因為 current_step >= T_max 而結束，代表有人超時了 (Truncated)
@@ -112,7 +113,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv()
+    env = SatelliteDataDisseminationEnv(T_max=T_MAX)
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -124,7 +125,7 @@ def main():
     ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     # 取得空間大小
-    dummy_env = SatelliteDataDisseminationEnv()
+    dummy_env = SatelliteDataDisseminationEnv(T_max=T_MAX)
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)
@@ -142,17 +143,21 @@ def main():
             enable_env_runner_and_connector_v2=False,
         )
         # .rollouts(num_rollout_workers=2, rollout_fragment_length="auto")
-        .env_runners(num_env_runners=2, rollout_fragment_length="auto") 
+        .env_runners(
+            num_env_runners=2, 
+            rollout_fragment_length=100
+        ) 
         .resources(num_gpus=1) # 根據硬體調整
         .multi_agent(
             policies=policies,
             policy_mapping_fn=policy_mapping_fn,
+            count_steps_by="agent_steps"
         )
         .callbacks(CMARL_LagrangianCallback) # 掛載拉格朗日懲罰
         .training(
             gamma=0.99,            
             lr=1e-4,               
-            train_batch_size=4000, 
+            train_batch_size=3200, 
             clip_param=0.2,        
             model={
                 # 告訴 RLlib：不要用預設網路，用我寫好的 CTDE 模型！
