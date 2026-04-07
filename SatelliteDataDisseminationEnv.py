@@ -132,8 +132,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         all_done = bool(self.check_all_grids_fulfilled())
-        terminations = {agent_name: all_done for agent_name in self.agents}
         is_truncated = bool(self.current_step >= self.T_max)
+        is_done = all_done or is_truncated
+        terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         
         # 5. 更新狀態
@@ -190,9 +191,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 agent_id = self.constellation.get_id_by_name(agent_name)
                 covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
                 my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
-                global_cv.extend(my_teg)
+                global_cv.append(my_teg)
             else:
-                global_cv.extend([0.0] * self.Tw) # 死掉就補連續的 0
+                global_cv.append([0.0] * self.Tw) # 死掉就補連續的 0
 
         # return np.array(global_state, dtype=np.float32)
         return {

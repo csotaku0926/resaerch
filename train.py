@@ -3,7 +3,7 @@ import numpy as np
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
-from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
@@ -113,7 +113,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # =====================================================================
 def env_creator(args):
     env = SatelliteDataDisseminationEnv()
-    return PettingZooEnv(env)
+    return ParallelPettingZooEnv(env)
 
 def main():
     ray.init()
@@ -137,7 +137,12 @@ def main():
     config = (
         PPOConfig()
         .environment(env=env_name)
-        .rollouts(num_rollout_workers=2, rollout_fragment_length="auto") 
+        .api_stack(
+            enable_rl_module_and_learner=False,
+            enable_env_runner_and_connector_v2=False,
+        )
+        # .rollouts(num_rollout_workers=2, rollout_fragment_length="auto")
+        .env_runners(num_env_runners=2, rollout_fragment_length="auto") 
         .resources(num_gpus=1) # 根據硬體調整
         .multi_agent(
             policies=policies,
@@ -157,7 +162,7 @@ def main():
         .debugging(log_level="WARN")
     )
 
-    algo = config.build()
+    algo = config.build_algo()
     print("神經網路 (CTDE) 建構完成，開始訓練！")
 
     checkpoint_dir = "./satellite_checkpoints"
