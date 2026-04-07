@@ -46,6 +46,8 @@ class Constellation:
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
         self.target_k = 100
+        self.users_per_grid = 10
+        self.max_covered_grid = 4 # assume at most cover 4 grids per time
 
         # 這裡使用簡化的通訊參數
         self.s_freq_hz = 2e9    # S-band 2GHz (for user erasure)
@@ -70,7 +72,7 @@ class Constellation:
 
         # ------------ build constellation ------------------
         self.build_constellation()
-        self.initialize_roi(target_k=self.target_k)
+        self.initialize_roi(users_per_grid=self.users_per_grid, target_k=self.target_k)
 
     def reset(self):
         """reset whole constellation (buffer state, inital position)"""
@@ -448,9 +450,9 @@ class Constellation:
                 for user in grid.users:
                     e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
                     avg_ratio += (1.0 - e_rate)
-                avg_ratio /= len(grid.users)
+                # avg_ratio /= len(grid.users)
             
-            avg_ratio /= len(covered_grids)
+            avg_ratio /= (self.max_covered_grid * self.users_per_grid)
                     
             teg_vector.append(avg_ratio)
             
