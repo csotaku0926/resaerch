@@ -10,7 +10,7 @@ MU = 398600.4418         # 地球標準重力參數 (km^3/s^2)
 R = 6371.2    # SGP4 使用的地球半徑標準
 
 class Constellation:
-    def __init__(self, alt=540.0, inc=53.2, p=4, s=4, f=17, 
+    def __init__(self, alt=540.0, inc=53.2, p=72, s=22, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10,
                  packet_size_bits=80e6, broadcast_rate_bps=30e6,
