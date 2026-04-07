@@ -68,7 +68,7 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
         return action_logits, state
 
     def value_function(self):
-        """訓練階段：Critic 拿上帝視角評估剛剛的表現"""
+        """訓練階段: Critic 拿上帝視角評估剛剛的表現"""
         global_buf = self._last_global_state["buffers"]
         global_cv = self._last_global_state["contact_volumes"]
         
@@ -88,11 +88,12 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         self.lambda_weight = 0.0  
         self.target_e = 0.2       # 超時率必須 <= 20%
         self.lr_lambda = 0.01     
+        self.T_max = 90
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 如果因為 current_step >= T_max 而結束，代表有人超時了 (Truncated)
         # 你可以根據 infos 或是 step 的回傳來更精確判定，這裡簡單判定回合長度
-        is_timeout = 1.0 if episode.length >= 90 else 0.0
+        is_timeout = 1.0 if episode.length >= self.T_max else 0.0
         episode.custom_metrics["episode_cost"] = is_timeout
 
     def on_train_result(self, *, algorithm, result, **kwargs):
