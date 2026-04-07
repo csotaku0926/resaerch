@@ -27,8 +27,11 @@ def check_roi_coverage(T_max=900):
         visible_found = False
         for i, sat in enumerate(env.agents):
             grids = env.get_visible_grids(i, current_time)
-            if len(grids) > 0:
-                print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI！可視網格數: {len(grids)}")
+            target_name = "Starlink_Shell2_61_0"
+            _id = env.get_id_by_name(target_name)
+            if len(grids) > 0 and sat.name == target_name:
+                print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI！可視網格數: {len(grids)}\
+                CV: {env.get_teg_downlink_volume(_id, grids, 2, current_time)}")
                 visible_found = True
                 
         # 如果你想讓畫面乾淨一點，可以把下面這行註解掉

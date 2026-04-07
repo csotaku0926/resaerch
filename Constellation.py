@@ -366,10 +366,11 @@ class Constellation:
         # 4. 計算最終的接收 SNR (假設發射功率與天線增益固定)
         ptx_dbm = self.ptx_dbm
         gtx_db = self.gtx_db
+        grx_db = self.grx_db
         noise_dbm = self.noise_dbm
         
         # SNR = 接收功率 - 雜訊
-        snr_db = (ptx_dbm + gtx_db - fspl_db - atmospheric_loss_db) - noise_dbm
+        snr_db = (ptx_dbm + gtx_db + grx_db - fspl_db - atmospheric_loss_db) - noise_dbm
         
         # =============================================================
         # 5. SNR 到 Erasure Rate 的平滑映射 (Sigmoid / 瀑布曲線)
