@@ -88,9 +88,9 @@ N_TRAIN_ITER = 200
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
-        self.lambda_weight = 5.0  
+        self.lambda_weight = 0.1  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.1     
+        self.lr_lambda = 0.1   
         self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
@@ -121,8 +121,19 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * is_violated)
         result["custom_metrics"]["lambda_weight"] = self.lambda_weight
 
+        # 2. 定義廣播動作 (這只是一個內部函數，不需要 import)
+        def broadcast_lambda(env):
+            actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
+            actual_env.current_lambda = self.lambda_weight
+
         # 【核心 3】: Global Reward 扣除懲罰
-        result["env_runners"]["episode_reward_mean"] -= (self.lambda_weight * avg_cost)
+        # result["env_runners"]["episode_reward_mean"] -= (self.lambda_weight * avg_cost)
+        # 3. 【關鍵修正】：自動偵測你的 Ray 版本來抓取正確的環境群組！
+        # 如果是新版 Ray，它會抓 env_runner_group；如果是舊版，它會抓 workers
+        worker_group = getattr(algorithm, "env_runner_group", None) or algorithm.workers
+        
+        # 讓這群工人去執行上面的 broadcast_lambda
+        worker_group.foreach_env(broadcast_lambda)
 
 # =====================================================================
 # 3. 主程式：設定與啟動訓練

@@ -21,6 +21,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         self.constellation = Constellation()
         self.N = len(self.constellation.agents)
+        self.current_lambda = 1.0
+        # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
+        self.is_greedy_baseline = False
 
         # 加入這兩行 (PettingZoo 鐵規則)
         self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
@@ -61,7 +64,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.current_step = 0
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
-        self.reward_factor = 1e5 # scale down reward
+        self.reward_factor = 1e3 # scale down reward
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -118,7 +121,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         for agent_name in self.agents:
             # name_i = agent_i.name
             i = self.constellation.get_id_by_name(agent_name)
-            rewards[agent_name] = -self.current_step
+            rewards[agent_name] = 0 #-self.current_step
             # 神經網路輸出的比例 (0~1)
             raw_action = actions[agent_name] # {"LEO_i": action}
             
@@ -163,6 +166,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         is_violation = 1.0 if (is_truncated and not all_done) else 0.0
+
+        # if is_violation:
+        for agent_name in self.agents:
+            rewards[agent_name] -= self.current_lambda * cost
         
         # 5. 更新狀態
         self.current_step += 1
