@@ -82,7 +82,9 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
-T_MAX = 10
+T_MAX = 90
+N_TRAIN_ITER = 20
+
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
@@ -93,23 +95,31 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation
-        last_info = episode.last_info_for(episode.get_agents()[0])
+        last_info = episode.last_info_for(episode.get_agents()[0]) # {is_viloation: 1.0}
         
-        # 如果最後任務沒解完，就把這一局標記為「Cost = 1」
-        violation_flag = last_info.get("is_violation", 0.0) if last_info else 0.0
-        episode.custom_metrics["episode_cost"] = violation_flag
+        # 還沒解完的比例
+        cost = last_info.get("cost", 0.0) if last_info else 0.0
+        # obtain metrics
+        comp_time = last_info.get("time", 0.0) if last_info else 0.0
+        tx_cost = last_info.get("tx_cost", 0.0) if last_info else 0.0
+        
+        # final metrics
+        episode.custom_metrics["episode_cost"] = cost
+        episode.custom_metrics["completion_time"] = comp_time
+        episode.custom_metrics["transmission_cost"] = tx_cost
 
     def on_train_result(self, *, algorithm, result, **kwargs):
-        if "custom_metrics" in result and "episode_cost_mean" in result["custom_metrics"]:
-            avg_cost = result["custom_metrics"]["episode_cost_mean"]
-            
-            # 動態調整懲罰權重
-            constraint_violation = avg_cost - self.target_e
-            self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * constraint_violation)
-            result["custom_metrics"]["lambda_weight"] = self.lambda_weight
+        # get cost from result dict
+        env_metrics = result.get("env_runners", {})
+        custom_metrics = env_metrics.get("custom_metrics", {})
+        
+        # 動態調整懲罰權重
+        avg_cost = custom_metrics["episode_cost_mean"]
+        self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * avg_cost)
+        result["custom_metrics"]["lambda_weight"] = self.lambda_weight
 
-            # 【核心 3】: Global Reward 扣除懲罰
-            result["env_runners"]["episode_reward_mean"] -= (self.lambda_weight * avg_cost)
+        # 【核心 3】: Global Reward 扣除懲罰
+        result["env_runners"]["episode_reward_mean"] -= (self.lambda_weight * avg_cost)
 
 # =====================================================================
 # 3. 主程式：設定與啟動訓練
@@ -175,13 +185,19 @@ def main():
     checkpoint_dir = "./satellite_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    for i in range(100):
+    for i in range(N_TRAIN_ITER):
         result = algo.train()
         reward_mean = result["env_runners"]["episode_reward_mean"]
-        cost_mean = result["custom_metrics"].get("episode_cost_mean", 0.0)
+        # get cost from result dict
+        env_metrics = result.get("env_runners", {})
+        custom_metrics = env_metrics.get("custom_metrics", {})
+        cost_mean = custom_metrics.get("episode_cost_mean", 0.0)
+        comp_time_mean = custom_metrics.get("completion_time_mean", 0.0)
+        tx_cost_mean = custom_metrics.get("transmission_cost_mean", 0.0)
         lam = result["custom_metrics"].get("lambda_weight", 0.0)
         
         print(f"Iter {i:03d} | 全局 Reward: {reward_mean:.2f} | 超時率(Cost): {cost_mean*100:.1f}% | 懲罰權重(Lambda): {lam:.3f}")
+        print(f"完成步數: {comp_time_mean:.1f} | 總流量: {tx_cost_mean:.1f}")
 
         if i % 10 == 0:
             algo.save(checkpoint_dir)

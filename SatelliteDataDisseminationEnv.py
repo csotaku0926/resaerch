@@ -59,6 +59,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.ts = load.timescale()
         self.step_seconds = 10
         self.current_step = 0
+        self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
 
         # 通訊參數
@@ -85,7 +86,16 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             "global_state" : current_global_state 
             } for agent_name in self.agents
         }
-        infos = {agent_name: {} for agent_name in self.agents}
+
+        self.episode_tx_cost = 0.0
+        infos = {
+            agent_name: {
+                "is_violation" : 0.0, 
+                "cost" : 0,  # ratio of receiver that not decode yet
+                "tx_cost": self.episode_tx_cost,
+                "time": self.current_step
+            } for agent_name in self.agents
+        }
         
         return observations, infos
 
@@ -109,8 +119,19 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             i = self.constellation.get_id_by_name(agent_name)
             rewards[agent_name] = -self.current_step
             # 神經網路輸出的比例 (0~1)
-            action_probs = actions[agent_name] # {"LEO_i": action}
+            raw_action = actions[agent_name] # {"LEO_i": action}
             
+            # ==========================================
+            # 【新增：總量守恆限制】確保分配總和不超過 1.0
+            # ==========================================
+            action_sum = np.sum(raw_action)
+            if action_sum > 1.0:
+                # 如果總和大於 1，就按比例壓縮 (例如 2.5 會被等比例壓縮成總和剛好 1.0)
+                action_probs = raw_action / action_sum
+            else:
+                # 如果總和小於或等於 1，代表衛星想「保留」一部分封包在自己的 Buffer 裡不傳，這是合法的！
+                action_probs = raw_action
+
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
             
@@ -120,19 +141,23 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
                 actual_flow = min(desired_flows[j], contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
+                # count in "actual_flow"
                 rewards[agent_name] -= actual_flow
+                self.episode_tx_cost += actual_flow
                 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
             actual_flow = min(desired_flows[self.M], contact_capacity)
             rewards[agent_name] -= actual_flow
+            self.episode_tx_cost += actual_flow
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         all_done = bool(self.check_all_grids_fulfilled())
-        is_truncated = bool(self.current_step >= self.T_max)
+        cost = float(1.0 - self.constellation.get_user_fulfill_percent())
+        is_truncated = bool(self.current_step >= self.T_max - 1)
         is_done = all_done or is_truncated
         terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
@@ -153,7 +178,14 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             "global_state" : current_global_state 
             } for agent_name in self.agents
         }
-        infos = {agent_name: {"is_violation" : is_violation} for agent_name in self.agents}
+        infos = {
+            agent_name: {
+                "is_violation" : is_violation, 
+                "cost" : cost,  # ratio of receiver that not decode yet
+                "tx_cost": self.episode_tx_cost,
+                "time": self.current_step
+            } for agent_name in self.agents
+        }
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
         # if all_done or is_truncated:
@@ -239,6 +271,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
     def check_all_grids_fulfilled(self):
         total_recv_percent = self.constellation.get_user_fulfill_percent()
-        target = (1 - self.e) # constraint
+        target = float(1 - self.e) # constraint
         return (total_recv_percent >= target)
 

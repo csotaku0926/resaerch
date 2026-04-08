@@ -59,6 +59,10 @@ class Constellation:
         self.losses_db = 3.0 # 其他系統與指向損失
         self.noise_dbm = -100.0
 
+        # time scale
+        ts = load.timescale()
+        self.t_init = ts.utc(2026, 4, 1, 0, 0, 0) # 你的預設起始時間
+
         # 計算 Mean Motion (rad/min)
         n_rad_per_sec = math.sqrt(MU / (A**3))
         self.NO_KOZAI = n_rad_per_sec * 60.0  # 轉換為每分鐘的弧度
@@ -72,7 +76,16 @@ class Constellation:
 
         # ------------ build constellation ------------------
         self.build_constellation()
-        self.initialize_roi(users_per_grid=self.users_per_grid, target_k=self.target_k)
+        sat0_lat, sat0_lon = self.locate_sat_init(agent_id=0)
+        self.initialize_roi(
+            lat_min=sat0_lat - 2.0, 
+            lat_max=sat0_lat + 2.0, 
+            lon_min=sat0_lon - 2.0, 
+            lon_max=sat0_lon + 2.0, 
+            grid_size=2.0,
+            users_per_grid=self.users_per_grid, 
+            target_k=self.target_k
+        )
 
     def reset(self):
         """reset whole constellation (buffer state, inital position)"""
@@ -83,12 +96,12 @@ class Constellation:
             self.user_grids[i].reset()
 
     def build_constellation(self):
-        # 載入時間系統
+        # # 載入時間系統
         ts = load.timescale()
-        # 設定一個基準紀元時間 (Epoch)，所有衛星從這點開始跑
-        epoch = ts.utc(2026, 4, 1, 0, 0, 0)
+        # # 設定一個基準紀元時間 (Epoch)，所有衛星從這點開始跑
+        # epoch = ts.utc(2026, 4, 1, 0, 0, 0)
         # sgp4_init 需要的是以 1949 年 12 月 31 日為基準的天數 (Skyfield ts.tt可以直接給出，這裡簡單使用 jd - 2433281.5)
-        epoch_days = epoch.tt - 2433281.5 
+        epoch_days = self.t_init.tt - 2433281.5 
 
         # --- 2. 生成 Walker-Delta 並直接建立 Skyfield 物件 ---
         for p in range(self.p):
@@ -157,12 +170,20 @@ class Constellation:
         pos = self.agents[0].get_pos(t_test)
         print(f"衛星 {self.agents[0].name} 在 {t_test.utc_datetime()} 的 3D 座標 (X, Y, Z) km: \n{pos}")
 
+    def locate_sat_init(self, agent_id):
+        subpoint = self.agents[agent_id].skyfield_sat.at(self.t_init).subpoint()
+        sat_lat = subpoint.latitude.degrees
+        sat_lon = subpoint.longitude.degrees
+        return sat_lat, sat_lon
+
     def initialize_roi(self, lat_min=21.0, lat_max=25.0, lon_min=119.0, lon_max=123.0, grid_size=2.0, users_per_grid=10, target_k=100):
         """
         根據經緯度範圍，自動生成 GroundGrid 陣列與散佈在其中的 Users
         """
         grid_id_counter = 0
         user_id_counter = 0
+
+        print(f"Initialize grids at lat {lat_min}~{lat_max}, lon {lon_min}~{lon_max}")
 
         # 產生經緯度的 grid
         lats = np.arange(lat_min, lat_max, grid_size)
@@ -299,6 +320,7 @@ class Constellation:
             difference = leo_sat - meo_sat
             # topocentric = difference.at(current_time)
             distance_km = difference.at(current_time).distance().km
+            # print(distance_km)
             
             # 如果 MEO 看 LEO 的仰角大於 0 度 (或者你設定的 min_elevation)
             # 代表訊號沒有被地球擋住
@@ -313,6 +335,7 @@ class Constellation:
                 
                 # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
                 self.transfer_buffer(neighbor=i, amount=actual_received_packets)
+                # print(self.get_leo_buffer(i))
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
         sat = self.agents[agent_id].skyfield_sat
@@ -409,6 +432,7 @@ class Constellation:
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
                 self.user_grids[g_idx].users[ui].recv(received)
+                # print(self.user_grids[g_idx].users[ui].get_buffer())
 
     def get_user_fulfill_percent(self) -> float:
         # return the percentage
@@ -420,6 +444,16 @@ class Constellation:
             user_cnt += grid.get_user_count()
         return ful_cnt / user_cnt
    
+    def get_user_received_percent(self) -> float:
+        # return the percentage
+        ful_cnt = 0
+        user_cnt = 0
+
+        for grid in self.user_grids:
+            ful_cnt += sum(grid.get_user_total_recv())
+            user_cnt += grid.get_user_count()
+        return ful_cnt / user_cnt
+
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
     
