@@ -61,6 +61,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.current_step = 0
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
+        self.reward_factor = 1e5 # scale down reward
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -142,13 +143,13 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 actual_flow = min(desired_flows[j], contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
                 # count in "actual_flow"
-                rewards[agent_name] -= actual_flow
+                rewards[agent_name] -= actual_flow / self.reward_factor
                 self.episode_tx_cost += actual_flow
                 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
             actual_flow = min(desired_flows[self.M], contact_capacity)
-            rewards[agent_name] -= actual_flow
+            rewards[agent_name] -= actual_flow / self.reward_factor
             self.episode_tx_cost += actual_flow
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)

@@ -82,15 +82,15 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
-T_MAX = 90
-N_TRAIN_ITER = 20
+T_MAX = 150
+N_TRAIN_ITER = 200
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
-        self.lambda_weight = 0.0  
+        self.lambda_weight = 5.0  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.01     
+        self.lr_lambda = 0.1     
         self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
@@ -98,12 +98,14 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         last_info = episode.last_info_for(episode.get_agents()[0]) # {is_viloation: 1.0}
         
         # 還沒解完的比例
+        is_vio = last_info.get("is_violation", 0.0) if last_info else 0.0
         cost = last_info.get("cost", 0.0) if last_info else 0.0
         # obtain metrics
         comp_time = last_info.get("time", 0.0) if last_info else 0.0
         tx_cost = last_info.get("tx_cost", 0.0) if last_info else 0.0
         
         # final metrics
+        episode.custom_metrics["is_vio"] = is_vio
         episode.custom_metrics["episode_cost"] = cost
         episode.custom_metrics["completion_time"] = comp_time
         episode.custom_metrics["transmission_cost"] = tx_cost
@@ -115,7 +117,8 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         
         # 動態調整懲罰權重
         avg_cost = custom_metrics["episode_cost_mean"]
-        self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * avg_cost)
+        is_violated = custom_metrics["is_vio_mean"]
+        self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * is_violated)
         result["custom_metrics"]["lambda_weight"] = self.lambda_weight
 
         # 【核心 3】: Global Reward 扣除懲罰
