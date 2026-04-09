@@ -8,7 +8,8 @@ from Constellation import Constellation
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, num_neighbors=4, num_grids=1, T_max=90):
+    def __init__(self, num_neighbors=4, num_grids=1, T_max=90, 
+                 is_ORNC=False, is_ERNC=False, is_myotic=False):
         super().__init__()
 
         # 1. 定義 param
@@ -19,11 +20,16 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)
         self.Tw = 2             # time window for contact volume
         
-        self.constellation = Constellation()
+        if (is_myotic): self.Tw = 1
+
+        self.constellation = Constellation(t_max=T_max)
         self.N = len(self.constellation.agents)
         self.current_lambda = 1.0
+
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
-        self.is_greedy_baseline = False
+        self.is_ORNC_baseline = is_ORNC
+        self.is_ERNC_baseline = is_ERNC
+        self.is_myotic_baseline = is_myotic
 
         # 加入這兩行 (PettingZoo 鐵規則)
         self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
@@ -31,8 +37,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # 2. 定義動作空間 (Action Space) - 連續變數
         # 每個 LEO 輸出一個長度為 M+1 的陣列，範圍 [0, 1]，代表流量分配比例
+        self.action_shape = (self.M + 1,)
         self.action_spaces = {
-            agent.name: Box(low=0.0, high=1.0, shape=(self.M + 1,), dtype=np.float32)
+            agent.name: Box(low=0.0, high=1.0, shape=self.action_shape, dtype=np.float32)
             for agent in self.constellation.agents
         }
         
@@ -65,6 +72,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
         self.reward_factor = 1e3 # scale down reward
+        self.reward_factor_time = 1e4
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -97,7 +105,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "is_violation" : 0.0, 
                 "cost" : 0,  # ratio of receiver that not decode yet
                 "tx_cost": self.episode_tx_cost,
-                "time": self.current_step
+                "time": self.constellation.get_finish_time_cost()
             } for agent_name in self.agents
         }
         
@@ -117,6 +125,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 3. 計算 Reward (獎勵設計)
         # rewards = {i:-self.current_step for i in range(self.N)}
         rewards = {}
+        ft = self.constellation.get_finish_time_cost()
 
         for agent_name in self.agents:
             # name_i = agent_i.name
@@ -124,10 +133,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             rewards[agent_name] = 0 #-self.current_step
             # 神經網路輸出的比例 (0~1)
             raw_action = actions[agent_name] # {"LEO_i": action}
-            
-            # ==========================================
-            # 【新增：總量守恆限制】確保分配總和不超過 1.0
-            # ==========================================
+
+            # 【總量守恆限制】確保分配總和不超過 1.0
             action_sum = np.sum(raw_action)
             if action_sum > 1.0:
                 # 如果總和大於 1，就按比例壓縮 (例如 2.5 會被等比例壓縮成總和剛好 1.0)
@@ -138,6 +145,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
+
+            # ==============
+            # baseline 邏輯
+            # ==============
+            if (self.is_ERNC_baseline):
+                desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)
             
             # --- 套用物理拘束 (Contact Volume) ---
             # Intra-tier (給鄰居)
@@ -157,8 +170,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
+            # time cost
+            rewards[agent_name] -= self.current_step / self.reward_factor_time
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
+        # update finish time
+        self.constellation.set_finish_time(self.current_step)
         all_done = bool(self.check_all_grids_fulfilled())
         cost = float(1.0 - self.constellation.get_user_fulfill_percent())
         is_truncated = bool(self.current_step >= self.T_max - 1)
@@ -191,7 +208,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "is_violation" : is_violation, 
                 "cost" : cost,  # ratio of receiver that not decode yet
                 "tx_cost": self.episode_tx_cost,
-                "time": self.current_step
+                "time": ft
             } for agent_name in self.agents
         }
 

@@ -40,8 +40,9 @@ class GroundGrid:
         self.grid_size = grid_size
         self.target_k = target_k  # 該網格解碼所需的 DoF 數量
         # self.received_count = 0 # 累計收到的 NC 封包 (用於 Reward 計算)
-
+        
         self.users = []
+        self.user_finish_time = [] # -1: no complete yet
 
     def get_user_total_recv(self) -> list[int]:
         miss_lst = [user.received_count for user in self.users]
@@ -57,6 +58,10 @@ class GroundGrid:
     def reset(self):
         for i in range(len(self.users)):
             self.users[i].reset()
+            self.user_finish_time[i] = -1
+    
+    def get_finish_time(self) -> list[int]:
+        return self.user_finish_time
 
 
 def main():

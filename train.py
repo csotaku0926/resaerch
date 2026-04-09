@@ -83,14 +83,14 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
 T_MAX = 150
-N_TRAIN_ITER = 200
+N_TRAIN_ITER = 300
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
         self.lambda_weight = 0.1  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.1   
+        self.lr_lambda = 0.01   
         self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
@@ -139,7 +139,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(T_max=T_MAX)
+    env = SatelliteDataDisseminationEnv(T_max=T_MAX, is_myotic=True)
     return ParallelPettingZooEnv(env)
 
 def main():

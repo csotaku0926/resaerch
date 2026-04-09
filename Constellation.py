@@ -14,7 +14,7 @@ class Constellation:
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10,
                  packet_size_bits=80e6, broadcast_rate_bps=30e6,
-                 step_seconds=10):
+                 step_seconds=10, t_max=90):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
@@ -48,6 +48,7 @@ class Constellation:
         self.target_k = 100
         self.users_per_grid = 10
         self.max_covered_grid = 4 # assume at most cover 4 grids per time
+        self.t_max = t_max
 
         # 這裡使用簡化的通訊參數
         self.s_freq_hz = 2e9    # S-band 2GHz (for user erasure)
@@ -205,6 +206,7 @@ class Constellation:
                     
                     user = User(user_id_counter, u_lat, u_lon, target_k=target_k)
                     grid.users.append(user)
+                    grid.user_finish_time.append(-1)
                     user_id_counter += 1
                     
                 self.user_grids.append(grid)
@@ -453,6 +455,29 @@ class Constellation:
             ful_cnt += sum(grid.get_user_total_recv())
             user_cnt += grid.get_user_count()
         return ful_cnt / user_cnt
+
+    def set_finish_time(self, current_step:int):
+        k = self.target_k
+        for gi, grid in enumerate(self.user_grids):
+            total_recv = grid.get_user_total_recv()
+            for ui, recv in enumerate(total_recv):
+                # update finish time if done and not set yet
+                if (recv >= k and self.user_grids[gi].user_finish_time[ui] == -1):
+                    self.user_grids[gi].user_finish_time[ui] = current_step
+
+    def get_finish_time_cost(self) -> float:
+        """get avg time cost so far"""
+        avg_time = 0.0
+        t_max = self.t_max
+        for grid in self.user_grids:
+            finish_times = grid.get_finish_time()
+            for ft in finish_times:
+                if ft > -1: avg_time += ft
+                else: avg_time += t_max
+            avg_time /= grid.get_user_count()
+        avg_time /= len(self.user_grids)
+
+        return avg_time
 
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
