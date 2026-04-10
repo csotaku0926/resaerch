@@ -1,125 +1,119 @@
-from pettingzoo.test import parallel_api_test
-from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
-
+import os
 import numpy as np
-from datetime import timedelta
-from skyfield.api import load
-from Constellation import Constellation
+import ray
+import matplotlib.pyplot as plt
+from ray.rllib.algorithms.algorithm import Algorithm
+from ray.tune.registry import register_env
+from ray.rllib.models import ModelCatalog
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 
-def check_roi_coverage(T_max=100):
-    print("初始化星系與網格 (這會花幾秒鐘)...")
-    env = Constellation(step_seconds=10)
-    
-    ts = load.timescale()
-    start_dt = env.agents[0].skyfield_sat.epoch.utc_datetime()
-    
-    print(f"模擬開始時間: {start_dt}")
-    print(f"尋找涵蓋 RoI (台灣) 的衛星...")
+# 引入你的環境與自定義模型 (與 train.py 相同)
+from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
+from train import MAPPO_CTDE_Model, T_MAX  # 假設你把前面的程式碼存成 train.py
 
-    # 模擬未來 2 個小時 (LEO 繞地球超過一圈)
-    # 2 小時 = 7200 秒 = 720 個 step (每步 10 秒)
-    
-    for step in range(T_max):
-        current_dt = start_dt + timedelta(seconds=step * 10)
-        current_time = ts.utc(current_dt.year, current_dt.month, current_dt.day, 
-                              current_dt.hour, current_dt.minute, current_dt.second)
-        
-        # 檢查每顆衛星是否看到任何 Ground Grid
-        visible_found = False
-        for i, sat in enumerate(env.agents):
-            grids = env.get_visible_grids(i, current_time)
-            # target_name = "Starlink_Shell2_61_0"
-            # _id = env.get_id_by_name(target_name)
-            if len(grids) > 0:
-                print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI！可視網格數: {len(grids)}\
-                CV: {env.get_teg_downlink_volume(i, grids, 2, current_time)}")
-                visible_found = True
-                
-        # 如果你想讓畫面乾淨一點，可以把下面這行註解掉
-        # if not visible_found:
-        #     print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 無衛星涵蓋")
 
-def run_diagnostic(T_max=100):
-    print("=== 衛星環境物理參數診斷開始 ===")
-    
-    # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(T_max=T_max)
-    obs, info = env.reset()
-    
-    # 獲取初始參數
-    T_max = env.T_max
-    n_agents = len(env.possible_agents)
-    total_grids = env.constellation.n_grids
-    
-    # 取得當前總需求 (以所有網格的 K 總和為準)
-    # 假設 get_user_fulfill_percent 是根據完成度比例
-    initial_fulfill = env.constellation.get_user_fulfill_percent()
-    
-    print(f"[參數確認]")
-    print(f"- 衛星數量: {n_agents}")
-    print(f"- 網格數量: {total_grids}")
-    print(f"- 最大步數 (T_max): {T_max}")
-    print(f"- 初始完成度: {initial_fulfill:.2%}")
-    print("-" * 30)
-
-    # 2. 測試：如果所有衛星「完全躺平」(零動作)
-    print("[測試 1: 零動作測試 (純觀察 MEO 補給與時間流逝)]")
-    for s in range(5):
-        # 建立全 0 的動作 (不傳輸任何資料)
-        actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32) 
-                   for agent in env.agents}
-        obs, rewards, terms, truncs, infos = env.step(actions)
-        
-        fulfill = env.constellation.get_user_fulfill_percent()
-        # 看看 MEO 有沒有把 LEO 的 Buffer 填滿
-        total_buffer = sum([env.constellation.get_leo_buffer(i) for i in range(n_agents)])
-        
-        print(f"Step {s+1} | 全網總 Buffer: {total_buffer} packet | 完成度: {fulfill:.2%}")
-
-    print("-" * 30)
-
-    # 3. 測試：如果所有衛星「全力輸出」(動作設為 1)
-    print("[測試 2: 最大輸出測試 (確認產力上限)]")
-    env.reset()
-    for s in range(T_max):
-        # 動作設為 1，代表衛星嘗試把所有 Buffer 往外丟
-        # 實際上會被 env 裡的 min(desired, capacity) 擋住
-        actions = {agent: np.ones(env.action_spaces[agent].shape, dtype=np.float32)
-                   for agent in env.agents}
-        obs, rewards, terms, truncs, infos = env.step(actions)
-        
-        fulfill = env.constellation.get_user_fulfill_percent()
-        recvd = env.constellation.get_user_received_percent()
-        violated = infos['Starlink_Shell2_0_0']["is_violation"]
-        if fulfill >= (1 - env.e) or (s+1) == T_max:
-            print(f">>> 最終結果 @ Step {s+1}: 完成度 {fulfill:.2%} | 是否結束: {not violated}")
-            break
-        
-        if (s+1) % 10 == 0:
-            print(f"Step {s+1} | 完成度: {fulfill:.2%} | 已收到 avg: {recvd}")
-
-    # print(infos)
-    print("\n=== 診斷結論 ===")
-    if fulfill >= (1 - env.e) and (s+1) < 5:
-        print("[警告] 任務太簡單了！衛星在 5 步內就傳完了。這會導致 Cost 永遠是 0。")
-        print("建議：增加網格需求量 K，或減少 broadcast_rate_bps。")
-    elif fulfill < 0.01:
-        print("[警告] 任務太難或物理參數斷開了！跑滿 90 步完成度幾乎沒動。")
-        print("建議：檢查 download_to_grid 邏輯，或增加傳輸速率。")
-    else:
-        print("[正常] 物理參數看起來在合理範圍，任務需要一段時間才能完成。")
-
-def basic_test():
-    env = SatelliteDataDisseminationEnv()
-    # 這行會自動用隨機動作幫你跑過幾百個 step，檢查有沒有任何格式、維度不合的 bug
-    parallel_api_test(env, num_cycles=1000)
-    print("環境測試完美通過！可以開始訓練了！")
+### test settings ####
+IS_ERNC = True
+IS_ONC = False
+IS_MYOTIC = False
+##===============###
 
 def main():
-    Tmax = 90
-    # check_roi_coverage(T_max=Tmax)
-    run_diagnostic(T_max=Tmax)
+    ray.init()
 
+    # ==========================================
+    # 1. 重新註冊環境與神經網路模型 (必須與訓練時一致)
+    # ==========================================
+    ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+    
+    # 這裡你需要確保你的環境支援動態調整使用者/節點數量 (例如傳入 num_users)
+    def env_creator(config):
+        # config 會帶入我們想要測試的使用者數量
+        num_users = config.get("num_users", 10)
+        env = SatelliteDataDisseminationEnv(T_max=T_MAX, num_users=num_users, 
+                                            is_ERNC=IS_ERNC, is_ORNC=IS_ONC, is_myotic=IS_MYOTIC)
+        return ParallelPettingZooEnv(env)
+        
+    register_env("satellite_nc_env", env_creator)
 
-if __name__ == '__main__':
+    # ==========================================
+    # 2. 載入訓練好的權重 (Checkpoint)
+    # ==========================================
+    # 請將下方路徑替換成你實際的 checkpoint 資料夾路徑
+    # 通常在 ./satellite_checkpoints/checkpoint_000XXX 裡面
+    checkpoint_path = "./satellite_checkpoints/checkpoint_000300" 
+    
+    print(f"正在從 {checkpoint_path} 載入模型...")
+    algo = Algorithm.from_checkpoint(checkpoint_path)
+
+    # ==========================================
+    # 3. 測試迴圈：Tx Cost v.s. User Number
+    # ==========================================
+    user_numbers = [10, 20, 30, 40, 50]
+    num_episodes = 50 # 每個設定跑 50 回合做蒙地卡羅平均
+    
+    avg_tx_costs = []
+
+    for n_users in user_numbers:
+        print(f"\n開始測試 User Number = {n_users}")
+        
+        # 建立指定使用者數量的環境
+        env = env_creator({"num_users": n_users})
+        episode_tx_costs = []
+
+        for ep in range(num_episodes):
+            obs, info = env.reset()
+            terminations = {"__all__": False}
+            truncations = {"__all__": False}
+            total_tx_cost = 0.0
+
+            while not terminations["__all__"] and not truncations["__all__"]:
+                # decentralized execution: 每個 agent 獨立給動作
+                actions = {}
+                for agent_id, agent_obs in obs.items():
+                    # compute_single_action 會自動呼叫你模型裡的 forward 函數
+                    # explore=False 確保 Actor 只輸出機率最高的 Deterministic Action
+                    actions[agent_id] = algo.compute_single_action(
+                        observation=agent_obs,
+                        policy_id="shared_policy",
+                        explore=False 
+                    )
+                
+                # 環境推進下一步
+                obs, rewards, terminations, truncations, infos = env.step(actions)
+                
+                # 從 infos 中擷取你的 tx_cost
+                # 假設 PettingZoo 環境的 info 字典結構是 info[agent_id]["tx_cost"]
+                step_tx_cost = 0.0
+                for agent_id, agent_info in infos.items():
+                    step_tx_cost += agent_info.get("tx_cost", 0.0)
+                
+                total_tx_cost += step_tx_cost
+
+            episode_tx_costs.append(total_tx_cost)
+            
+        # 計算該 User Number 下的平均傳輸成本
+        mean_cost = np.mean(episode_tx_costs)
+        avg_tx_costs.append(mean_cost)
+        print(f"User Number: {n_users} | 平均 Tx Cost: {mean_cost:.2f}")
+
+    ray.shutdown()
+
+    # ==========================================
+    # 4. 畫圖 (Tx Cost v.s. User Number)
+    # ==========================================
+    plt.figure(figsize=(8, 6))
+    plt.plot(user_numbers, avg_tx_costs, marker='o', linestyle='-', color='b', label='MAPPO (CTDE)')
+    
+    plt.title('Transmission Cost vs User Number', fontsize=14)
+    plt.xlabel('Number of Users', fontsize=12)
+    plt.ylabel('Average Transmission Cost (Tx Cost)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    
+    # 儲存圖片或顯示出來
+    plt.savefig('tx_cost_vs_users.png', dpi=300)
+    plt.show()
+
+if __name__ == "__main__":
     main()

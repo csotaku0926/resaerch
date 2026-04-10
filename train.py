@@ -82,15 +82,16 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
-T_MAX = 150
+T_MAX = 100
 N_TRAIN_ITER = 300
+LAMBDA_W = 0.0
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
-        self.lambda_weight = 0.1  
+        self.lambda_weight = LAMBDA_W  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.01   
+        self.lr_lambda = 0.1   
         self.T_max = T_MAX
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
@@ -100,8 +101,10 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         # 還沒解完的比例
         is_vio = last_info.get("is_violation", 0.0) if last_info else 0.0
         cost = last_info.get("cost", 0.0) if last_info else 0.0
+        print("cost:", cost)
         # obtain metrics
         comp_time = last_info.get("time", 0.0) if last_info else 0.0
+        print("time:", comp_time)
         tx_cost = last_info.get("tx_cost", 0.0) if last_info else 0.0
         
         # final metrics
@@ -116,7 +119,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         custom_metrics = env_metrics.get("custom_metrics", {})
         
         # 動態調整懲罰權重
-        avg_cost = custom_metrics["episode_cost_mean"]
+        avg_cost = max(custom_metrics["episode_cost_mean"] - self.target_e, 0.0)
         is_violated = custom_metrics["is_vio_mean"]
         self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * is_violated)
         result["custom_metrics"]["lambda_weight"] = self.lambda_weight
@@ -139,7 +142,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(T_max=T_MAX, is_myotic=True)
+    env = SatelliteDataDisseminationEnv(T_max=T_MAX, lambda_w=LAMBDA_W)
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -156,6 +159,10 @@ def main():
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)
 
+    n_runner = 2
+    frag_len = 100
+    train_batch_size = dummy_env.constellation.t * T_MAX * n_runner
+
     # 所有衛星共用這一個大腦 (包含 Actor 和 Critic)
     policies = {"shared_policy": (None, obs_space, act_space, {})}
     def policy_mapping_fn(agent_id, episode, worker, **kwargs):
@@ -170,8 +177,8 @@ def main():
         )
         # .rollouts(num_rollout_workers=2, rollout_fragment_length="auto")
         .env_runners(
-            num_env_runners=2, 
-            rollout_fragment_length=100
+            num_env_runners=n_runner, 
+            rollout_fragment_length=frag_len
         ) 
         .resources(num_gpus=1) # 根據硬體調整
         .multi_agent(
@@ -183,7 +190,7 @@ def main():
         .training(
             gamma=0.99,            
             lr=1e-4,               
-            train_batch_size=3200, 
+            train_batch_size=train_batch_size, 
             clip_param=0.2,        
             model={
                 # 告訴 RLlib：不要用預設網路，用我寫好的 CTDE 模型！

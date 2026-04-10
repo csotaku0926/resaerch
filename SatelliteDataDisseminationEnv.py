@@ -8,7 +8,7 @@ from Constellation import Constellation
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, num_neighbors=4, num_grids=1, T_max=90, 
+    def __init__(self, num_neighbors=4, num_grids=1, T_max=90, num_users=10, lambda_w=0,
                  is_ORNC=False, is_ERNC=False, is_myotic=False):
         super().__init__()
 
@@ -22,9 +22,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         if (is_myotic): self.Tw = 1
 
-        self.constellation = Constellation(t_max=T_max)
+        self.constellation = Constellation(t_max=T_max, num_users=num_users)
         self.N = len(self.constellation.agents)
-        self.current_lambda = 1.0
+        self.current_lambda = lambda_w
 
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
         self.is_ORNC_baseline = is_ORNC
@@ -71,8 +71,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.current_step = 0
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
-        self.reward_factor = 1e3 # scale down reward
-        self.reward_factor_time = 1e4
+        self.reward_factor = 1e4 # scale down reward
+        self.reward_factor_time = 1
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -171,7 +171,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
             # time cost
-            rewards[agent_name] -= self.current_step / self.reward_factor_time
+            rewards[agent_name] -= 1 / self.reward_factor_time
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         # update finish time

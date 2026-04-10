@@ -9,12 +9,17 @@ from datetime import datetime, timedelta
 MU = 398600.4418         # 地球標準重力參數 (km^3/s^2)
 R = 6371.2    # SGP4 使用的地球半徑標準
 
+"""
+Starlink 2: s=20, p=36, h=570
+Telesat:
+OneWeb:
+"""
 class Constellation:
-    def __init__(self, alt=540.0, inc=53.2, p=4, s=4, f=17, 
+    def __init__(self, alt=540.0, inc=53.2, p=20, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
-                 n_grids=10,
-                 packet_size_bits=80e6, broadcast_rate_bps=30e6,
-                 step_seconds=10, t_max=90):
+                 n_grids=10, num_users=10,
+                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
+                 step_seconds=10, t_max=90, target_k=100):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
@@ -41,12 +46,12 @@ class Constellation:
         MEO_A = R + self.meo_alt
 
         # communication param
-        self.meo_tx_rate_bps = 100e6 # 100 Mbps
+        self.meo_tx_rate_bps = meo_tx_rate_bps # 100 Mbps
         self.packet_size_bits = packet_size_bits
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
-        self.target_k = 100
-        self.users_per_grid = 10
+        self.target_k = target_k
+        self.users_per_grid = num_users
         self.max_covered_grid = 4 # assume at most cover 4 grids per time
         self.t_max = t_max
 
@@ -474,8 +479,8 @@ class Constellation:
             for ft in finish_times:
                 if ft > -1: avg_time += ft
                 else: avg_time += t_max
-            avg_time /= grid.get_user_count()
-        avg_time /= len(self.user_grids)
+
+        avg_time /= self.get_user_count()
 
         return avg_time
 
@@ -509,7 +514,6 @@ class Constellation:
                 for user in grid.users:
                     e_rate = self.calculate_erasure_rate(agent_id, user, future_t)
                     avg_ratio += (1.0 - e_rate)
-                # avg_ratio /= len(grid.users)
             
             avg_ratio /= (self.max_covered_grid * self.users_per_grid)
                     
