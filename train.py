@@ -119,7 +119,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         custom_metrics = env_metrics.get("custom_metrics", {})
         
         # 動態調整懲罰權重
-        avg_cost = max(custom_metrics["episode_cost_mean"] - self.target_e, 0.0)
+        avg_cost = custom_metrics["episode_cost_mean"]
         is_violated = custom_metrics["is_vio_mean"]
         self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * (avg_cost - self.target_e))
         result["custom_metrics"]["lambda_weight"] = self.lambda_weight
