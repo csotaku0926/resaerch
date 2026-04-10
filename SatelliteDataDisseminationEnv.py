@@ -186,7 +186,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # if is_violation:
         for agent_name in self.agents:
-            rewards[agent_name] -= self.current_lambda * cost
+            rewards[agent_name] -= self.current_lambda
         
         # 5. 更新狀態
         self.current_step += 1

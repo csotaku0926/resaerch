@@ -13,10 +13,28 @@ from train import MAPPO_CTDE_Model, T_MAX  # 假設你把前面的程式碼存�
 
 
 ### test settings ####
+IS_MINE = False
 IS_ERNC = True
 IS_ONC = False
 IS_MYOTIC = False
 ##===============###
+
+def plot(user_numbers, avg_tx_costs):
+        # ==========================================
+    # 4. 畫圖 (Tx Cost v.s. User Number)
+    # ==========================================
+    plt.figure(figsize=(8, 6))
+    plt.plot(user_numbers, avg_tx_costs, marker='o', linestyle='-', color='b', label='MAPPO (CTDE)')
+    
+    plt.title('Transmission Cost vs User Number', fontsize=14)
+    plt.xlabel('Number of Users', fontsize=12)
+    plt.ylabel('Average Transmission Cost (Tx Cost)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    
+    # 儲存圖片或顯示出來
+    plt.savefig('tx_cost_vs_users.png', dpi=300)
+    plt.show()
 
 def main():
     ray.init()
@@ -43,8 +61,9 @@ def main():
     # 通常在 ./satellite_checkpoints/checkpoint_000XXX 裡面
     checkpoint_path = "./satellite_checkpoints/checkpoint_000300" 
     
-    print(f"正在從 {checkpoint_path} 載入模型...")
-    algo = Algorithm.from_checkpoint(checkpoint_path)
+    if (IS_MINE):
+        print(f"正在從 {checkpoint_path} 載入模型...")
+        algo = Algorithm.from_checkpoint(checkpoint_path)
 
     # ==========================================
     # 3. 測試迴圈：Tx Cost v.s. User Number
@@ -98,22 +117,6 @@ def main():
         print(f"User Number: {n_users} | 平均 Tx Cost: {mean_cost:.2f}")
 
     ray.shutdown()
-
-    # ==========================================
-    # 4. 畫圖 (Tx Cost v.s. User Number)
-    # ==========================================
-    plt.figure(figsize=(8, 6))
-    plt.plot(user_numbers, avg_tx_costs, marker='o', linestyle='-', color='b', label='MAPPO (CTDE)')
-    
-    plt.title('Transmission Cost vs User Number', fontsize=14)
-    plt.xlabel('Number of Users', fontsize=12)
-    plt.ylabel('Average Transmission Cost (Tx Cost)', fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
-    
-    # 儲存圖片或顯示出來
-    plt.savefig('tx_cost_vs_users.png', dpi=300)
-    plt.show()
 
 if __name__ == "__main__":
     main()

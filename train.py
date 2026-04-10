@@ -121,7 +121,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         # 動態調整懲罰權重
         avg_cost = max(custom_metrics["episode_cost_mean"] - self.target_e, 0.0)
         is_violated = custom_metrics["is_vio_mean"]
-        self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * is_violated)
+        self.lambda_weight = max(0.0, self.lambda_weight + self.lr_lambda * (avg_cost - self.target_e))
         result["custom_metrics"]["lambda_weight"] = self.lambda_weight
 
         # 2. 定義廣播動作 (這只是一個內部函數，不需要 import)
