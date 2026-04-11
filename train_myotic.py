@@ -66,13 +66,6 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 
         # 3. Actor 僅憑 Local 資訊給出動作
         action_logits = self.actor(local_features)
-
-        # action_mask = input_dict["obs"]["local_obs"]["action_mask"]
-        
-        # 使用 PyTorch 的 masked_fill，把 mask == 0 的動作機率變成極小的負數 (-1e9)
-        # 這樣 Softmax 之後，這些斷線路徑的選擇機率就會是絕對的 0%
-        # masked_logits = action_logits.masked_fill(action_mask == 0, -1e9)
-
         return action_logits, state
 
     def value_function(self):
@@ -92,17 +85,17 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 T_MAX = 80
 N_TRAIN_ITER = 300
-LAMBDA_W = 10.0
-IS_MYOTIC = False
+LAMBDA_W = 0.1
+IS_MYOTIC = True
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
         self.lambda_weight = LAMBDA_W  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.1      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
+        self.lr_lambda = 0.01      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
         self.T_max = T_MAX
-        self.max_lambda = 15.0
+        self.max_lambda = 5.0
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation
@@ -136,8 +129,14 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 
         diff = avg_cost - self.target_e
         
-        # 超標了！快速調高懲罰 (罰得快)
-        step = self.lr_lambda * diff
+        # 【關鍵絕招：不對稱更新】
+        if diff > 0:
+            # 超標了！快速調高懲罰 (罰得快)
+            step = self.lr_lambda * diff
+        else:
+            # 達標了！但只用 "十分之一" 的速度慢慢調降懲罰 (原諒得慢)
+            # 這能防止 lambda 瞬間掉到 0，讓模型不敢輕易擺爛
+            step = (self.lr_lambda * 0.1) * diff 
             
         new_lambda = self.lambda_weight + step
         self.lambda_weight = min(self.max_lambda, max(0.0, new_lambda))
@@ -217,15 +216,11 @@ def main():
             # 假設你總共跑 300 iter * 4500 步 = 135萬步，我們讓它在後期冷靜下來
             lr_schedule=[
                 [0, 1e-4],          # 一開始正常學
-                [10 * train_batch_size, 5e-5],     # 中期放慢一半
-                [30 * train_batch_size, 1e-5]     # 後期進入微調模式，鎖住好不容易找到的最佳解
+                [50 * train_batch_size, 5e-5],     # 中期放慢一半
+                [100 * train_batch_size, 1e-5]     # 後期進入微調模式，鎖住好不容易找到的最佳解
             ],               
             train_batch_size=train_batch_size, 
-            clip_param=0.2,       
-            entropy_coeff=0.01,   # 保持微小的好奇心，防止過早僵化 
-            # vf_clip_param=500.0,
-            # kl_target=0.01,       # 絕對不能漏！強制煞車機制，防止策略突然崩潰
-            # kl_coeff=0.2,         # 配合 kl_target 使用的動態權重
+            clip_param=0.2,        
             model={
                 # 告訴 RLlib：不要用預設網路，用我寫好的 CTDE 模型！
                 "custom_model": "my_ctde_model",
@@ -237,10 +232,9 @@ def main():
     algo = config.build_algo()
     print("神經網路 (CTDE) 建構完成，開始訓練！")
 
-    checkpoint_dir = "./satellite_checkpoints"
+    checkpoint_dir = "./satellite_myotic_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # write training log
     # ==========================================
     # 【新增】：建立並打開 CSV 檔案，準備記錄數據
     # ==========================================

@@ -15,11 +15,11 @@ Telesat:
 OneWeb:
 """
 class Constellation:
-    def __init__(self, alt=540.0, inc=53.2, p=20, s=10, f=17, 
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
-                 step_seconds=10, t_max=90, target_k=100):
+                 step_seconds=10, t_max=90, target_k=40):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
@@ -182,7 +182,7 @@ class Constellation:
         sat_lon = subpoint.longitude.degrees
         return sat_lat, sat_lon
 
-    def initialize_roi(self, lat_min=21.0, lat_max=25.0, lon_min=119.0, lon_max=123.0, grid_size=2.0, users_per_grid=10, target_k=100):
+    def initialize_roi(self, lat_min=0.0, lat_max=45.0, lon_min=0.0, lon_max=123.0, grid_size=20.0, users_per_grid=10, target_k=100):
         """
         根據經緯度範圍，自動生成 GroundGrid 陣列與散佈在其中的 Users
         """
@@ -487,7 +487,7 @@ class Constellation:
     def get_user_count(self):
         return sum([ g.get_user_count() for g in self.user_grids ])
     
-    def get_teg_downlink_volume(self, agent_id: int, covered_grids:list[int], n_time_window: int, current_time) -> list[int]:
+    def get_teg_downlink_volume(self, agent_id: int, n_time_window: int, current_time) -> list[int]:
         """
         真正的 TEG Contact Volume (時效性總量)
         往未來推演，計算這顆衛星離開這個網格前，"總共"還能砸下多少有效封包。
@@ -496,8 +496,8 @@ class Constellation:
     
         # sat = self.agents[agent_id]
         # covered_grids = self.get_visible_grids(agent_id, current_time)
-        if (len(covered_grids) == 0):
-            return [0] * n_time_window
+        # if (len(covered_grids) == 0):
+        #     return [0] * n_time_window
         
         for future_step in range(n_time_window):
             # 1. 時間往未來推進
@@ -506,6 +506,8 @@ class Constellation:
             future_t = ts.utc(future_dt.year, future_dt.month, future_dt.day, 
                                 future_dt.hour, future_dt.minute, future_dt.second)
             
+            covered_grids = self.get_visible_grids(agent_id, future_t)
+
             # 2. 取得未來的仰角
             avg_ratio = 0.0
             for gi in covered_grids: 

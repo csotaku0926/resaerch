@@ -19,80 +19,110 @@ import torch.nn as nn
 from ray.rllib.models import ModelCatalog
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 
+import torch
+import torch.nn as nn
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+import numpy as np
+
 class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         super().__init__(obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
-        # 動態計算輸入維度 (攤平後的長度)
+        # 抓取特徵維度
         local_obs_space = obs_space.original_space["local_obs"]
         global_state_space = obs_space.original_space["global_state"]
         
-        local_dim = np.prod(local_obs_space["buffers"].shape) + np.prod(local_obs_space["contact_volumes"].shape)
-        global_dim = np.prod(global_state_space["buffers"].shape) + np.prod(global_state_space["contact_volumes"].shape)
+        self.Tw = local_obs_space["contact_volumes"].shape[1]
+        self.num_local_links = local_obs_space["contact_volumes"].shape[0] # 通常是 M+1 (鄰居+地面)
+        self.num_global_links = global_state_space["contact_volumes"].shape[0] # N (全網衛星數)
+        
+        buf_local_dim = np.prod(local_obs_space["buffers"].shape)
+        buf_global_dim = np.prod(global_state_space["buffers"].shape)
 
-        # 【核心 1】: Local Actor 網路 (只吃 local_dim)
-        self.actor = nn.Sequential(
-            nn.Linear(local_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_outputs) # 輸出流量分配比例
-        )
-
-        # 【核心 2】: Global Critic 網路 (只吃 global_dim)
-        self.critic = nn.Sequential(
-            nn.Linear(global_dim, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1) # 輸出全局 Value 評分
+        # ==========================================
+        # 【核心 1】: Local Actor (LSTM + MLP 雙流架構)
+        # ==========================================
+        self.lstm_hidden_dim = 64
+        
+        # 專門處理 TEG 時間序列的 LSTM
+        # input_size = 鏈路數量 (每個時間點有幾個容量特徵)
+        self.local_teg_lstm = nn.LSTM(
+            input_size=self.num_local_links, 
+            hidden_size=self.lstm_hidden_dim, 
+            batch_first=True
         )
         
-        self._last_global_state = None # 暫存區，用來給 Critic 訓練
+        # 融合靜態 Buffer 與動態 TEG 的決策層
+        self.actor_mlp = nn.Sequential(
+            nn.Linear(buf_local_dim + self.lstm_hidden_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_outputs)
+        )
+
+        # ==========================================
+        # 【核心 2】: Global Critic (上帝視角的 LSTM)
+        # ==========================================
+        self.global_teg_lstm = nn.LSTM(
+            input_size=self.num_global_links, 
+            hidden_size=self.lstm_hidden_dim, 
+            batch_first=True
+        )
+        
+        self.critic_mlp = nn.Sequential(
+            nn.Linear(buf_global_dim + self.lstm_hidden_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1) # 輸出 Value
+        )
+        
+        self._last_global_state = None
 
     def forward(self, input_dict, state, seq_lens):
-        """執行階段：衛星呼叫 Actor 做出決策"""
-        # 1. 提取 Local Obs 並攤平成 1D 向量
-        local_buf = input_dict["obs"]["local_obs"]["buffers"]
-        local_cv = input_dict["obs"]["local_obs"]["contact_volumes"]
+        """Actor 決策前向傳播"""
+        # 1. 取得 Local 觀測值 (RLlib 會自動幫你加上 Batch 維度)
+        local_buf = input_dict["obs"]["local_obs"]["buffers"] # 形狀: [Batch, 5]
+        local_cv = input_dict["obs"]["local_obs"]["contact_volumes"] # 形狀: [Batch, 5, Tw]
         
-        local_buf_flat = local_buf.reshape(local_buf.shape[0], -1)
-        local_cv_flat = local_cv.reshape(local_cv.shape[0], -1)
-        local_features = torch.cat([local_buf_flat, local_cv_flat], dim=1)
-
-        # 2. 偷偷把 Global State 存起來，供等一下 Critic 訓練使用
         self._last_global_state = input_dict["obs"]["global_state"]
 
-        # 3. Actor 僅憑 Local 資訊給出動作
-        action_logits = self.actor(local_features)
-
-        # action_mask = input_dict["obs"]["local_obs"]["action_mask"]
+        # 2. 【最關鍵的物理轉置】：把時間軸放到 LSTM 的 Sequence 欄位
+        # 將 [Batch, Links, Time] 轉成 [Batch, Time, Links]
+        local_cv_seq = local_cv.transpose(1, 2) 
         
-        # 使用 PyTorch 的 masked_fill，把 mask == 0 的動作機率變成極小的負數 (-1e9)
-        # 這樣 Softmax 之後，這些斷線路徑的選擇機率就會是絕對的 0%
-        # masked_logits = action_logits.masked_fill(action_mask == 0, -1e9)
+        # 3. 通過 LSTM，提取時間趨勢
+        # h_n 是 LSTM 在最後一個時間步的隱藏狀態，代表「對未來的總結」
+        _, (h_n, _) = self.local_teg_lstm(local_cv_seq)
+        
+        # h_n 的形狀是 [1, Batch, 64]，把最外面的 1 壓扁
+        cv_features = h_n.squeeze(0) # 變成 [Batch, 64]
 
+        # 4. 特徵融合與決策
+        # 把現在的 Buffer 和未來的 TEG 趨勢接在一起
+        combined_features = torch.cat([local_buf, cv_features], dim=1)
+        action_logits = self.actor_mlp(combined_features)
+        
         return action_logits, state
 
     def value_function(self):
-        """訓練階段: Critic 拿上帝視角評估剛剛的表現"""
+        """Critic 價值評估前向傳播"""
         global_buf = self._last_global_state["buffers"]
         global_cv = self._last_global_state["contact_volumes"]
-        
-        global_buf_flat = global_buf.reshape(global_buf.shape[0], -1)
-        global_cv_flat = global_cv.reshape(global_cv.shape[0], -1)
-        global_features = torch.cat([global_buf_flat, global_cv_flat], dim=1)
 
-        # Critic 憑藉 Global 資訊給出分數
-        return self.critic(global_features).squeeze(-1)
+        # 全局 TEG 同樣需要轉置時間軸
+        global_cv_seq = global_cv.transpose(1, 2)
+        _, (h_n, _) = self.global_teg_lstm(global_cv_seq)
+        global_cv_features = h_n.squeeze(0)
 
+        # 特徵融合與打分
+        global_features = torch.cat([global_buf, global_cv_features], dim=1)
+        return self.critic_mlp(global_features).squeeze(-1)
+    
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
 T_MAX = 80
 N_TRAIN_ITER = 300
-LAMBDA_W = 10.0
+LAMBDA_W = 0.1
 IS_MYOTIC = False
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
@@ -100,9 +130,9 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         super().__init__()
         self.lambda_weight = LAMBDA_W  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.1      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
+        self.lr_lambda = 0.01      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
         self.T_max = T_MAX
-        self.max_lambda = 15.0
+        self.max_lambda = 5.0
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation

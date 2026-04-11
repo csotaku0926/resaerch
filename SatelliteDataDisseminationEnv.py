@@ -48,6 +48,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.observation_spaces = {
             agent.name: Dict({
                 "local_obs": Dict({
+                    "action_mask": Box(low=0.0, high=1.0, shape=self.action_shape, dtype=np.float32),
                     # 1. 庫存純量 (5 維)：[自己, 鄰居1, 鄰居2, 鄰居3, 鄰居4]
                     "buffers": Box(low=0.0, high=1.0, shape=(1 + self.M,), dtype=np.float32),
                 
@@ -58,6 +59,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 }), 
                 # 3. Global State (N) 
                 "global_state": Dict({
+                    # "action_mask": Box(low=0.0, high=1.0, shape=self.action_shape, dtype=np.float32),
                     "buffers": Box(low=0.0, high=1.0, shape=(self.N,), dtype=np.float32),
                     "contact_volumes": Box(low=0.0, high=1.0, shape=(self.N, self.Tw), dtype=np.float32)
                 }) 
@@ -71,8 +73,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.current_step = 0
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
-        self.reward_factor = 1e4 # scale down reward
-        self.reward_factor_time = 1
+        # self.reward_factor = 1e4 # scale down reward
+        self.reward_factor_time = 1e2
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -146,26 +148,25 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
 
-            # ==============
-            # baseline 邏輯
-            # ==============
-            if (self.is_ERNC_baseline):
-                desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)
+
+            # if (self.is_ERNC_baseline):
+            #     desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)
             
             # --- 套用物理拘束 (Contact Volume) ---
             # Intra-tier (給鄰居)
+            max_buf = self.constellation.get_leo_max_buffer()
             for j, agent_j in enumerate(self.constellation.get_neighbors(i)):
                 contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
                 actual_flow = min(desired_flows[j], contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
                 # count in "actual_flow"
-                rewards[agent_name] -= actual_flow / self.reward_factor
+                rewards[agent_name] -= actual_flow / max_buf
                 self.episode_tx_cost += actual_flow
                 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
             actual_flow = min(desired_flows[self.M], contact_capacity)
-            rewards[agent_name] -= actual_flow / self.reward_factor
+            rewards[agent_name] -= actual_flow / max_buf
             self.episode_tx_cost += actual_flow
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
@@ -186,7 +187,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # if is_violation:
         for agent_name in self.agents:
-            rewards[agent_name] -= self.current_lambda
+            rewards[agent_name] -= self.current_lambda * cost
         
         # 5. 更新狀態
         self.current_step += 1
@@ -208,7 +209,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "is_violation" : is_violation, 
                 "cost" : cost,  # ratio of receiver that not decode yet
                 "tx_cost": self.episode_tx_cost,
-                "time": ft
+                "time": ft,
+                "lambda": self.current_lambda
             } for agent_name in self.agents
         }
 
@@ -247,8 +249,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         for agent_name in self.possible_agents:
             if agent_name in self.agents:
                 agent_id = self.constellation.get_id_by_name(agent_name)
-                covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
-                my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
+                # covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
+                my_teg = self.constellation.get_teg_downlink_volume(agent_id, self.Tw, current_time)
                 global_cv.append(my_teg)
             else:
                 global_cv.append([0.0] * self.Tw) # 死掉就補連續的 0
@@ -278,18 +280,33 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 特徵 2:  Contact Volume (5 * T 維)
         # ==========================================
         cv_matrix = np.zeros((1 + self.M, self.Tw), dtype=np.float32)
-        covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
+        # covered_grids = self.constellation.get_visible_grids(agent_id, current_time)
         
-        my_teg = self.constellation.get_teg_downlink_volume(agent_id, covered_grids, self.Tw, current_time)
+        my_teg = self.constellation.get_teg_downlink_volume(agent_id, self.Tw, current_time)
         # 填入自己對地的 TEG
         cv_matrix[0, :] = my_teg
         
         # 填入鄰居的 TEG
         for idx, j in enumerate(self.constellation.get_neighbors(agent_id)):
-            teg_j = self.constellation.get_teg_downlink_volume(j, covered_grids, self.Tw, current_time)
+            # grids_j = self.constellation.get_visible_grids(j, current_time)
+            teg_j = self.constellation.get_teg_downlink_volume(j, self.Tw, current_time)
             cv_matrix[idx + 1, :] = teg_j
 
+        # action mask
+        action_mask = np.zeros(self.M + 1, dtype=np.float32)
+        
+        # 1. 檢查鄰居 (ISL) 是否活著
+        for idx, j in enumerate(self.constellation.get_neighbors(agent_id)):
+            if self.constellation.get_ISL_capacity(agent_id, j, current_time) > 0:
+                action_mask[idx] = 1.0
+                
+        # 2. 檢查對地 (Downlink) 是否活著
+        if len(self.constellation.get_visible_grids(agent_id, current_time)) > 0:
+            if self.constellation.get_downlink_capacity() > 0:
+                action_mask[self.M] = 1.0
+
         return {
+            "action_mask": action_mask,
             "buffers": np.array(bufs, dtype=np.float32),
             "contact_volumes": cv_matrix
         }

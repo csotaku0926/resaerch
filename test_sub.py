@@ -116,7 +116,7 @@ def basic_test():
     print("環境測試完美通過！可以開始訓練了！")
 
 def main():
-    Tmax = 90
+    Tmax = 80
     # check_roi_coverage(T_max=Tmax)
     run_diagnostic(T_max=Tmax)
 
