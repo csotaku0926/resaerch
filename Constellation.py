@@ -32,6 +32,7 @@ class Constellation:
         self.meo_id = 9999
 
         self.n_grids = n_grids
+        self.grid_scale = 10.0
 
         self.agents = []
         self.user_grids = []
@@ -84,11 +85,11 @@ class Constellation:
         self.build_constellation()
         sat0_lat, sat0_lon = self.locate_sat_init(agent_id=0)
         self.initialize_roi(
-            lat_min=sat0_lat - 2.0, 
-            lat_max=sat0_lat + 2.0, 
-            lon_min=sat0_lon - 2.0, 
-            lon_max=sat0_lon + 2.0, 
-            grid_size=2.0,
+            lat_min=sat0_lat - self.grid_scale, 
+            lat_max=sat0_lat + self.grid_scale, 
+            lon_min=sat0_lon - self.grid_scale, 
+            lon_max=sat0_lon + self.grid_scale, 
+            grid_size=self.grid_scale,
             users_per_grid=self.users_per_grid, 
             target_k=self.target_k
         )
@@ -182,7 +183,7 @@ class Constellation:
         sat_lon = subpoint.longitude.degrees
         return sat_lat, sat_lon
 
-    def initialize_roi(self, lat_min=0.0, lat_max=45.0, lon_min=0.0, lon_max=123.0, grid_size=20.0, users_per_grid=10, target_k=100):
+    def initialize_roi(self, lat_min=0.0, lat_max=20.0, lon_min=0.0, lon_max=50.0, grid_size=20.0, users_per_grid=10, target_k=100):
         """
         根據經緯度範圍，自動生成 GroundGrid 陣列與散佈在其中的 Users
         """

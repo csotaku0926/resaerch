@@ -85,7 +85,7 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 T_MAX = 80
 N_TRAIN_ITER = 300
-LAMBDA_W = 0.1
+LAMBDA_W = 1e-4
 IS_MYOTIC = True
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
@@ -93,9 +93,9 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         super().__init__()
         self.lambda_weight = LAMBDA_W  
         self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 0.01      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
+        self.lr_lambda = 1e-4      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
         self.T_max = T_MAX
-        self.max_lambda = 5.0
+        self.max_lambda = 5e-3
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation
@@ -127,16 +127,9 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         print("avg_cost:", avg_cost)
         print("is_violated:", is_violated)
 
-        diff = avg_cost - self.target_e
+        diff = max(avg_cost - self.target_e, 0.0)
         
-        # 【關鍵絕招：不對稱更新】
-        if diff > 0:
-            # 超標了！快速調高懲罰 (罰得快)
-            step = self.lr_lambda * diff
-        else:
-            # 達標了！但只用 "十分之一" 的速度慢慢調降懲罰 (原諒得慢)
-            # 這能防止 lambda 瞬間掉到 0，讓模型不敢輕易擺爛
-            step = (self.lr_lambda * 0.1) * diff 
+        step = self.lr_lambda * diff
             
         new_lambda = self.lambda_weight + step
         self.lambda_weight = min(self.max_lambda, max(0.0, new_lambda))
