@@ -108,7 +108,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         current_time = self.ts.from_datetime(self.start_dt)
         observations = {
             agent_name: {
-            "action_mask" : np.zeros(self.M + 1, dtype=np.float32),
+            # "action_mask" : np.zeros(self.M + 1, dtype=np.float32),
             "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), current_time),
             "global_state" : current_global_state 
             } for agent_name in self.agents
