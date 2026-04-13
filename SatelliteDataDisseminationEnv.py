@@ -57,7 +57,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.observation_spaces = {
             agent.name: Dict({
                 "local_obs": Dict({
-                    "action_mask": Box(low=0.0, high=1.0, shape=self.action_shape, dtype=np.float32),
+                    "action_mask": Box(low=0.0, high=1.0, shape=self.action_shape, dtype=bool),
                     # 1. 庫存純量 (5 維)：[自己, 鄰居1, 鄰居2, 鄰居3, 鄰居4]
                     "buffers": Box(low=0.0, high=1.0, shape=(1 + self.M,), dtype=np.float32),
                 
@@ -182,11 +182,13 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 
                 if self.constellation.get_ISL_capacity(i, agent_j, current_time) > 0:
                     teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
+                    # print("teg_j:", np.sum(teg_j))
                     if np.sum(teg_j) > 0:  
                         action_mask[j] = 1.0
                 
                 contact_capacity = self.constellation.get_ISL_capacity(i, agent_j, current_time)
                 actual_flow = action_probs[j] * contact_capacity * action_mask[j] #min(desired_flows[j], contact_capacity) * action_mask[j]
+                # print("agent:", agent_j, " ISL:", contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=agent_j, amount=actual_flow)
                 # count in "actual_flow"
                 acc_cost += actual_flow
@@ -196,10 +198,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
             if len(self.constellation.get_visible_grids(i, current_time)) > 0:
-                if self.constellation.get_downlink_capacity() > 0:
-                    action_mask[self.M] = 1.0
-
+                action_mask[self.M] = 1.0
+                
             actual_flow = action_probs[self.M] * contact_capacity * action_mask[self.M] #min(desired_flows[self.M], contact_capacity)
+            # print("DL:", contact_capacity)
             acc_cost += actual_flow
             acc_max_cost += max_buf
 
@@ -233,9 +235,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         is_violation = 1.0 if (is_truncated and not all_done) else 0.0
 
-        if all_done:
-            for agent_name in self.agents:
-                rewards[agent_name] += 50.0    
+        # if all_done:
+        #     for agent_name in self.agents:
+        #         rewards[agent_name] += 50.0    
 
         if is_done:
             for agent_name in self.agents:
@@ -253,7 +255,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         observations = {
             agent_name: {
-            "action_mask" : action_mask,
             "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), next_time),
             "global_state" : current_global_state 
             } for agent_name in self.agents
@@ -311,7 +312,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # return np.array(global_state, dtype=np.float32)
         return {
-            # "action_mask": 
             "buffers": np.array(global_buf, dtype=np.float32),
             "contact_volumes": np.array(global_cv, dtype=np.float32)
         }

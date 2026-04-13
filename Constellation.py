@@ -271,8 +271,8 @@ class Constellation:
         # determine capacity
         # 若超出最大通訊距離，直接斷線
         
-        if dist > MAX_ISL_DISTANCE:
-            return 0
+        # if dist > MAX_ISL_DISTANCE:
+        #     return 0
             
         # --- 2. 實體層鏈路預算 (Link Budget) 模擬 ---
         
@@ -288,13 +288,12 @@ class Constellation:
         snr_linear = 10 ** (snr_db / 10.0)
 
         # --- 3. 動態容量計算 (Shannon Capacity) ---
-        bandwidth_hz = 100e6 # 物理頻寬 100 MHz
+        bandwidth_hz = 500e6 # 物理頻寬 100 MHz
         
+        # print(dist, snr_linear)
         # 理論最大傳輸速率 (bps)
         dynamic_rate_bps = bandwidth_hz * np.log2(1 + snr_linear)
-        
-        # 打個折扣 (例如 0.5)，代表實際調變編碼機制 (AMC) 的極限
-        actual_rate_bps = dynamic_rate_bps * 0.5 
+        actual_rate_bps = dynamic_rate_bps 
         
         # --- 4. 轉換為這 10 秒內能傳遞的 NC 封包數 ---
         # packet_size_bits = 80e6 # 10 MB = 80 Mbits
@@ -302,7 +301,7 @@ class Constellation:
         total_bits_in_step = actual_rate_bps * self.step_seconds
         max_packets = total_bits_in_step / self.packet_size_bits
         
-        return int(max_packets)
+        return int(10000 / dist) # --> 4 #int(max_packets) --> 0 
 
     def get_leo_buffer(self, agent_id):
         return self.agents[agent_id].get_buffer()   
@@ -374,7 +373,7 @@ class Constellation:
         # packet_size_bits = 80e6
         max_packets = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
         
-        return int(max_packets)
+        return 2 #int(max_packets)
 
     def calculate_erasure_rate(self, agent_id: int, user: User, current_time):
         """
@@ -388,7 +387,7 @@ class Constellation:
         slant_range_km = distance.km
         
         # 1. 物理視距極限保護
-        if elevation_deg < 10.0:
+        if elevation_deg < 20.0:
             return 1.0 # 仰角過低，被地球曲率或建築物完全遮蔽，物理上100%掉包
             
         # 2. 嚴謹的連續物理計算：自由空間路徑損失 (FSPL)

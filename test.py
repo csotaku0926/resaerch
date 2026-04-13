@@ -17,6 +17,7 @@ from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from datetime import timedelta
 import csv
 import os
+import sys
 
 from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
 from train_lstm import *
@@ -36,6 +37,8 @@ print(f"- target K: {TARGET_K}")
 print("-" * 30)
 # ─────────────────────────────────────────────────
 
+assert len(sys.argv) == 2, "usage: python3 test.py <const_mode>"
+MY_CONST_NAME = sys.argv[1]
 if MY_CONST_NAME == "oneweb":
     CONST_PARAM = ONEWEB_GEN1
 elif MY_CONST_NAME == "starlink":
@@ -78,7 +81,7 @@ def action_greedy_rlnc(real_id, actual_env, current_time):
     cvs = np.zeros(M + 1, dtype=np.float32)
 
     # ISL links：用鄰居的 downlink TEG 代表「透過這條 ISL 最終能到地面的量」
-    for idx, neighbor_id in enumerate(constellation.get_neighbors(real_id)):
+    for idx, neighbor_id in enumerate([constellation.get_neighbors(real_id)[0]]):
         if constellation.get_ISL_capacity(real_id, neighbor_id, current_time) > 0:
             teg = constellation.get_teg_downlink_volume(neighbor_id, Tw, current_time)
             cvs[idx] = float(np.sum(teg))
@@ -330,7 +333,7 @@ def main():
 
     algo = None
 
-    for mode in ["GREEDY"]: # "MAPPO" , "GREEDY" , "ERNC" , "STATIC_R"
+    for mode in ["MAPPO"]: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
         if mode == "MAPPO":
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
@@ -341,6 +344,16 @@ def main():
             register_env("satellite_nc_env", env_creator)
             algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_checkpoints"))
             print("MAPPO 載入完成")
+
+        elif mode == "MYOTIC":
+            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+            def env_creator(cfg):
+                return ParallelPettingZooEnv(
+                    SatelliteDataDisseminationEnv(
+                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10)))
+            register_env("satellite_nc_env", env_creator)
+            algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
+            print("MYOTIC 載入完成")
 
         tx_costs, fulfill_rates, times = run_mode(
             mode, USER_NUMBERS, NUM_EPISODES, algo=algo)
