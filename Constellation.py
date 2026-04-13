@@ -14,18 +14,26 @@ Starlink 2: s=20, p=36, h=570
 Telesat:
 OneWeb:
 """
-class Constellation:
-    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, 
-                 meo_alt=10000, meo_inc=45.0,
-                 n_grids=10, num_users=10,
-                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
-                 step_seconds=10, t_max=90, target_k=40):
-        # --- 1. Starlink Shell 2 官方參數 ---
+class Const_Param:
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
         self.s = s                   # 每面衛星數 (Sats per plane)
         self.f = f                   # 相位因子
+
+class Constellation:
+    def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
+                 meo_alt=10000, meo_inc=45.0,
+                 n_grids=10, num_users=10,
+                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
+                 step_seconds=10, t_max=90, target_k=20):
+        # --- 1. Starlink Shell 2 官方參數 ---
+        self.alt = param.alt         # 高度 (km)
+        self.inc = param.inc       # 傾角 (度)
+        self.p = param.p                   # 軌道面數 (Planes)
+        self.s = param.s                   # 每面衛星數 (Sats per plane)
+        self.f = param.f                   # 相位因子
         self.t = self.p * self.s                # 總共 1584 顆
         
         self.sat_id = 0

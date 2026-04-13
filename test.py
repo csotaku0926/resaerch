@@ -1,6 +1,13 @@
-import os
+"""
+三種 Baseline 的正確實作
+========================
+
+B1: Greedy-RLNC  —— 按 TEG contact volume 比例分配（有 ISL + downlink）
+B2: ER-NC        —— 有 downlink contact 就全打，不用 ISL，不做 planning
+B3: Static-R     —— 離線算 N*，每次固定送 N* 封包，不用 ISL，不做即時決策
+"""
+
 import numpy as np
-import math
 import ray
 import matplotlib.pyplot as plt
 from ray.rllib.algorithms.algorithm import Algorithm
@@ -8,178 +15,325 @@ from ray.tune.registry import register_env
 from ray.rllib.models import ModelCatalog
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from datetime import timedelta
+import csv
+import os
 
-# 引入你的環境與自定義模型
 from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
-from train import MAPPO_CTDE_Model, T_MAX  
+from train_lstm import *
+from param import *
 
-### 測試開關設定 ####
-IS_MINE = False
-IS_ERNC = True    # 開啟 ERNC 真實模擬
-IS_ONC = False    # 開啟 ONC 真實模擬
-IS_MYOTIC = False
-##===============###
+# ── 執行設定 ──────────────────────────────────────
+# MODE         = "ERNC"          # "MAPPO" | "GREEDY" | "ERNC" | "STATIC_R"
+USER_NUMBERS = [10, 50, 90, 130, 170, 210]
+NUM_EPISODES = 10
+TARGET_K = 20
+CONST_PARAM = STARLINK_S2
+T_MAX = 50
+# ─────────────────────────────────────────────────
 
-def plot(user_numbers, avg_tx_costs):
-    plt.figure(figsize=(8, 6))
-    
-    label_name = 'MAPPO (CTDE)'
-    if IS_ERNC: label_name = 'ERNC (Simulation Baseline)'
-    elif IS_ONC: label_name = 'ONC (Simulation Baseline)'
-    
-    plt.plot(user_numbers, avg_tx_costs, marker='o', linestyle='-', color='b', label=label_name)
-    plt.title('Transmission Cost vs User Number', fontsize=14)
-    plt.xlabel('Number of Users', fontsize=12)
-    plt.ylabel('Average Transmission Cost (Tx Cost)', fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
-    plt.savefig('tx_cost_vs_users_sim.png', dpi=300)
-    plt.show()
 
-def main():
-    ray.init()
+def current_skyfield_time(actual_env):
+    dt = actual_env.start_dt + timedelta(
+        seconds=actual_env.current_step * actual_env.step_seconds)
+    return actual_env.ts.utc(
+        dt.year, dt.month, dt.day,
+        dt.hour, dt.minute, dt.second)
 
-    # 1. 註冊環境與模型
-    ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
-    
-    def env_creator(config):
-        num_users = config.get("num_users", 10)
-        env = SatelliteDataDisseminationEnv(
-            T_max=T_MAX, 
-            num_users=num_users, 
-            is_ERNC=False, # 關閉環境內的舊版硬編碼
-            is_ORNC=False, 
-            is_myotic=IS_MYOTIC
-        )
-        return ParallelPettingZooEnv(env)
-        
-    register_env("satellite_nc_env", env_creator)
 
-    # 2. 載入模型權重
-    algo = None
-    if IS_MINE:
-        checkpoint_path = "./satellite_checkpoints" 
-        print(f"正在從 {checkpoint_path} 載入模型...")
-        algo = Algorithm.from_checkpoint(checkpoint_path)
-    elif IS_MYOTIC:
-        checkpoint_path = "./satellite_myotic_checkpoints" 
-        print(f"正在從 {checkpoint_path} 載入模型...")
-        algo = Algorithm.from_checkpoint(checkpoint_path)
+# ╔══════════════════════════════════════════════════════╗
+# ║  B1: Greedy-RLNC                                     ║
+# ║                                                      ║
+# ║  邏輯：                                              ║
+# ║    對每條 link（ISL ×M + downlink ×1），              ║
+# ║    用 TEG contact volume 當作「連結品質」指標，       ║
+# ║    按比例分配流量：action[j] ∝ TEG_j                 ║
+# ║                                                      ║
+# ║  ─ 有 ISL（傳給鄰居讓他們之後再送地面）              ║
+# ║  ─ 有 downlink（直接送地面）                         ║
+# ║  ─ 不看 deficit，純粹依連結品質貪婪分配              ║
+# ╚══════════════════════════════════════════════════════╝
+def action_greedy_rlnc(real_id, actual_env, current_time):
+    M             = actual_env.M
+    Tw            = actual_env.Tw
+    constellation = actual_env.constellation
+    action        = np.zeros(M + 1, dtype=np.float32)
 
-    # 3. 測試迴圈：Tx Cost v.s. User Number
-    user_numbers = [10, 20, 30, 40, 50]
-    num_episodes = 10 # 跑 10 局來讓機率分佈 (Monte Carlo) 更平滑
-    avg_tx_costs = []
+    buf = constellation.get_leo_buffer(real_id)
+    if buf <= 0:
+        return action
+
+    # ── 收集每條 link 的 TEG contact volume ──────────────
+    # TEG 是未來 Tw 步的容量向量，加總得到總 contact volume
+    cvs = np.zeros(M + 1, dtype=np.float32)
+
+    # ISL links：用鄰居的 downlink TEG 代表「透過這條 ISL 最終能到地面的量」
+    for idx, neighbor_id in enumerate(constellation.get_neighbors(real_id)):
+        if constellation.get_ISL_capacity(real_id, neighbor_id, current_time) > 0:
+            teg = constellation.get_teg_downlink_volume(neighbor_id, Tw, current_time)
+            cvs[idx] = float(np.sum(teg))
+
+    # 自己的 downlink TEG
+    if len(constellation.get_visible_grids(real_id, current_time)) > 0:
+        teg_self = constellation.get_teg_downlink_volume(real_id, Tw, current_time)
+        cvs[M] = float(np.sum(teg_self))
+
+    total_cv = float(np.sum(cvs))
+    if total_cv <= 0:
+        return action
+
+    # ── 按 TEG 比例分配：比例和為 1 → 用掉整個 buffer ──
+    action = (cvs / total_cv).astype(np.float32)
+    return action
+
+
+# ╔══════════════════════════════════════════════════════╗
+# ║  B2: ER-NC (Erasure-Recovery NC)                     ║
+# ║                                                      ║
+# ║  邏輯：                                              ║
+# ║    有 downlink contact → 整個 buffer 全打出去        ║
+# ║    沒有 downlink contact → 什麼都不傳                ║
+# ║    完全不用 ISL，不做任何 planning 或 buffer 管理    ║
+# ╚══════════════════════════════════════════════════════╝
+def action_ernc(real_id, actual_env, current_time):
+    M             = actual_env.M
+    constellation = actual_env.constellation
+    action        = np.zeros(M + 1, dtype=np.float32)
+
+    # 有可見 grid → 全力打 downlink（比例 1.0 = 整個 buffer）
+    # 環境 step() 內部會自動把實際流量 cap 在 downlink capacity
+    if len(constellation.get_visible_grids(real_id, current_time)) > 0:
+        action[M] = 1.0
+
+    # ISL 全部為 0（不用 ISL）
+    return action
+
+
+# ╔══════════════════════════════════════════════════════╗
+# ║  B3: Static Redundancy                               ║
+# ║                                                      ║
+# ║  邏輯：                                              ║
+# ║    【離線】根據長期平均 erasure rate p̄ 算出 N*        ║
+# ║       N* = K / (1 - p̄) × (1 + safety_margin)       ║
+# ║    【執行】每次 downlink contact 固定送 N* 封包       ║
+# ║    不看當前 buffer 大小、不看 deficit、不用 ISL      ║
+# ║    N* 在整個測試過程中不變                           ║
+# ╚══════════════════════════════════════════════════════╝
+def compute_n_star(actual_env, safety_margin=0.2):
+    """
+    離線估算 N*：對軌道多個時刻取樣，
+    算出所有衛星對所有用戶的平均 erasure rate p̄，
+    回傳 N* = K / (1 - p̄) × (1 + safety_margin)
+
+    參考: Courtade & Wesel, IEEE Trans. Commun., 2011
+    """
+    constellation = actual_env.constellation
+    TARGET_K      = constellation.target_k
+    ts            = actual_env.ts
+    start_dt      = actual_env.start_dt
+    step_sec      = actual_env.step_seconds
+
+    erasure_samples = []
+    sample_steps = np.linspace(0, actual_env.T_max - 1, 30, dtype=int)
+
+    for s in sample_steps:
+        dt = start_dt + timedelta(seconds=int(s) * step_sec)
+        t  = ts.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+        for sat_id in range(len(constellation.agents)):
+            visible = constellation.get_visible_grids(sat_id, t)
+            for gi in visible:
+                for user in constellation.user_grids[gi].users:
+                    p = constellation.calculate_erasure_rate(sat_id, user, t)
+                    if 0.0 <= p < 1.0:
+                        erasure_samples.append(p)
+
+    p_avg  = float(np.mean(erasure_samples)) if erasure_samples else 0.3
+    n_star = (TARGET_K / max(1e-9, 1.0 - p_avg)) * (1.0 + safety_margin)
+    print(f"  [Static-R] p̄={p_avg:.4f}, K={TARGET_K}, N*={n_star:.2f}")
+    return n_star
+
+
+def action_static_r(real_id, actual_env, current_time, n_star):
+    """
+    執行階段：固定送 N* 封包到 downlink，不用 ISL。
+    N* 是離線算好的常數，不隨即時狀況改變。
+    """
+    M             = actual_env.M
+    constellation = actual_env.constellation
+    action        = np.zeros(M + 1, dtype=np.float32)
+
+    visible = constellation.get_visible_grids(real_id, current_time)
+    buf     = constellation.get_leo_buffer(real_id)
+    cap_dl  = constellation.get_downlink_capacity()
+
+    if len(visible) > 0 and buf > 0:
+        target_flow = min(n_star, cap_dl, buf)
+        action[M]   = float(np.clip(target_flow / buf, 0.0, 1.0))
+
+    return action
+
+
+# ╔══════════════════════════════════════════════════════╗
+# ║  測試主迴圈                                          ║
+# ╚══════════════════════════════════════════════════════╝
+def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
+    avg_tx_costs      = []
+    avg_fulfill_rates = []
+    avg_comp_times    = []
+
+    checkpoint_dir = "./satellite_checkpoints"
+    if write_log:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        log_file_path = os.path.join(checkpoint_dir, f"{mode}_test_log.csv")
+        csv_file = open(log_file_path, "w", newline="")
+        csv_writer = csv.writer(csv_file)
+        # 寫入標題列 (Headers)
+        csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time"])
 
     for n_users in user_numbers:
-        print(f"\n==============================")
-        print(f"開始測試 User Number = {n_users}")
-        
-        env = env_creator({"num_users": n_users})
-        episode_tx_costs = []
+        print(f"\n[{mode}] ══ n_users={n_users} ══")
+
+        raw_env = SatelliteDataDisseminationEnv(
+            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users,
+            is_ERNC=False, is_ORNC=False, is_myotic=False)
+        env = ParallelPettingZooEnv(raw_env)
+
+        # B3：離線預算 N*，整個 n_users 設定共用一個值
+        n_star = None
+        if mode == "STATIC_R":
+            env.reset()
+            actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
+            print("  計算 N*（離線步驟）...")
+            n_star = compute_n_star(actual_env)
+
+        tx_costs      = []
+        comp_times    = []
+        fulfill_rates = []
 
         for ep in range(num_episodes):
-            obs, info = env.reset()
-            terminations = {"__all__": False}
-            truncations = {"__all__": False}
-            
+            obs, _ = env.reset()
             actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
-            TARGET_K = actual_env.constellation.target_k
+            done          = False
+            final_tx_cost = 0.0
 
-            final_episode_cost = 0.0
-
-            while not terminations["__all__"] and not truncations["__all__"]:
+            while not done:
+                current_time = current_skyfield_time(actual_env)
                 actions = {}
-                
-                # 計算時間
-                current_dt = actual_env.start_dt + timedelta(seconds=actual_env.current_step * actual_env.step_seconds)
-                current_time = actual_env.ts.utc(current_dt.year, current_dt.month, current_dt.day,
-                                                 current_dt.hour, current_dt.minute, current_dt.second)
 
                 for agent_id, agent_obs in obs.items():
                     real_id = actual_env.constellation.get_id_by_name(agent_id)
-                    action_shape = (actual_env.M + 1,)
-                    
-                    if IS_MINE or IS_MYOTIC:
+
+                    if mode == "MAPPO":
                         actions[agent_id] = algo.compute_single_action(
                             observation=agent_obs,
                             policy_id="shared_policy",
-                            explore=False 
-                        )
-                        
-                    elif IS_ERNC or IS_ONC:
-                        action = np.zeros(action_shape, dtype=np.float32)
-                        
-                        # 取得衛星自己目前的總 Buffer
-                        current_leo_buffer = actual_env.constellation.get_leo_buffer(real_id)
-                        
-                        # ISL 給鄰居：有頻寬就填滿 (依照你原本設定)
-                        for idx, neighbor_id in enumerate(actual_env.constellation.get_neighbors(real_id)):
-                            action[idx] = float(actual_env.constellation.get_ISL_capacity(real_id, neighbor_id, current_time))
-                        
-                        # ---------------------------------------------------------
-                        # 【核心模擬邏輯】：尋找地面最缺水的人，精準控制水閥
-                        # ---------------------------------------------------------
-                        visible_grids = actual_env.constellation.get_visible_grids(real_id, current_time)
-                        if len(visible_grids) > 0 and current_leo_buffer > 0:
-                            
-                            max_intended_tx = 0.0
-                            
-                            for gi in visible_grids:
-                                grid = actual_env.constellation.user_grids[gi]
-                                # 找出這個網格裡，收最少封包的那個衰鬼
-                                recv_list = grid.get_user_total_recv()
-                                min_recv = min(recv_list)
-                                
-                                # 計算缺口
-                                deficit = TARGET_K - min_recv
-                                
-                                if deficit > 0:
-                                    # 找出這個網格最差的掉包率，用來估算需要補發的量
-                                    worst_p = max([actual_env.constellation.calculate_erasure_rate(real_id, u, current_time) for u in grid.users])
-                                    
-                                    # 為了填補 deficit，預期需要發送的量
-                                    intended = deficit / (1.0 - worst_p)
-                                    
-                                    # 如果是 ONC (配對效率差)，需要更多的盲發才能湊到有用的 XOR
-                                    if IS_ONC: 
-                                        intended *= (1.0 + 0.2 * math.log(n_users)) 
-                                        
-                                    if intended > max_intended_tx:
-                                        max_intended_tx = intended
-                            
-                            # 物理限制：不能超過下行最大頻寬
-                            cap = actual_env.constellation.get_downlink_capacity()
-                            actual_target_flow = min(max_intended_tx, cap)
-                            
-                            # 將目標流量轉換為 action 的比例 (因為環境是 action_prob * leo_buffer)
-                            # 如果 target_flow 是 3，自己 buffer 是 10，action 比例就是 0.3
-                            action[actual_env.M] = actual_target_flow
-                        
-                        # 正規化輸出給環境
-                        total_cap = np.sum(action)
-                        if total_cap > current_leo_buffer:
-                            actions[agent_id] = action / total_cap  # 按比例縮放
-                        else:
-                            actions[agent_id] = action / current_leo_buffer if current_leo_buffer > 0 else action
+                            explore=False)
 
-                # 環境推進下一步 (真實丟骰子 np.random.binomial)
-                obs, rewards, terminations, truncations, infos = env.step(actions)
-                
-                # 抓取這局累積的真實 Tx Cost
-                if len(infos) > 0:
-                    first_agent = list(infos.keys())[0]
-                    final_episode_cost = infos[first_agent].get("tx_cost", 0.0)
+                    elif mode == "GREEDY":
+                        actions[agent_id] = action_greedy_rlnc(
+                            real_id, actual_env, current_time)
 
-            episode_tx_costs.append(final_episode_cost)
-            
-        mean_cost = np.mean(episode_tx_costs)
-        avg_tx_costs.append(mean_cost)
-        print(f"User Number: {n_users} | 平均真實 Tx Cost: {mean_cost:.2f}")
-        
-    # 畫圖
-    plot(user_numbers, avg_tx_costs)
+                    elif mode == "ERNC":
+                        actions[agent_id] = action_ernc(
+                            real_id, actual_env, current_time)
+
+                    elif mode == "STATIC_R":
+                        actions[agent_id] = action_static_r(
+                            real_id, actual_env, current_time, n_star)
+
+                obs, _, terminations, truncations, infos = env.step(actions)
+
+                if infos:
+                    first = list(infos.keys())[0]
+                    final_tx_cost = infos[first].get("tx_cost", 0.0)
+                    final_comp_time = infos[first].get("time", 0.0)
+
+                done = (terminations.get("__all__", False) or
+                        truncations.get("__all__", False))
+
+            fulfill = actual_env.constellation.get_user_fulfill_percent()
+            tx_costs.append(final_tx_cost)
+            comp_times.append(final_comp_time)
+            fulfill_rates.append(fulfill)
+            print(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time}"
+                  f" fulfill={fulfill*100:.1f}%")
+
+        avg_tx  = float(np.mean(tx_costs))
+        avg_ful = float(np.mean(fulfill_rates))
+        avg_time = float(np.mean(comp_times))
+        avg_tx_costs.append(avg_tx)
+        avg_fulfill_rates.append(avg_ful)
+        avg_comp_times.append(avg_time)
+        print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+        csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time])
+        csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
+
+    csv_file.close()
+
+    return avg_tx_costs, avg_fulfill_rates, avg_comp_times
+
+
+def plot_results(user_numbers, results):
+    colors  = {"MAPPO": "blue", "GREEDY": "green",
+               "ERNC": "orange", "STATIC_R": "red"}
+    markers = {"MAPPO": "o", "GREEDY": "s",
+               "ERNC": "^", "STATIC_R": "D"}
+    labels  = {
+        "MAPPO":    "MAPPO-CTDE (proposed)",
+        "GREEDY":   "B1: Greedy-RLNC",
+        "ERNC":     "B2: ER-NC",
+        "STATIC_R": "B3: Static Redundancy",
+    }
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    for mode, (tx_costs, fulfill_rates) in results.items():
+        kw = dict(marker=markers[mode], linestyle='-',
+                  color=colors[mode], label=labels[mode])
+        ax1.plot(user_numbers, tx_costs, **kw)
+        ax2.plot(user_numbers, fulfill_rates, **kw)
+
+    ax1.set_title('Transmission Cost vs Users')
+    ax1.set_xlabel('Number of Users')
+    ax1.set_ylabel('Avg Tx Cost (packets)')
+    ax1.grid(True, linestyle='--', alpha=0.6)
+    ax1.legend()
+
+    ax2.set_title('Fulfill Rate vs Users')
+    ax2.set_xlabel('Number of Users')
+    ax2.set_ylabel('Avg Fulfill Rate')
+    ax2.set_ylim(0, 1.05)
+    ax2.grid(True, linestyle='--', alpha=0.6)
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.savefig('baseline_comparison.png', dpi=300)
+    plt.show()
+    print("已儲存 baseline_comparison.png")
+
+
+def main():
+    ray.init(ignore_reinit_error=True)
+
+    algo = None
+
+    for mode in ["MAPPO"]: # "MAPPO" | "GREEDY" | "ERNC" | "STATIC_R"
+
+        if mode == "MAPPO":
+            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+            def env_creator(cfg):
+                return ParallelPettingZooEnv(
+                    SatelliteDataDisseminationEnv(
+                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10)))
+            register_env("satellite_nc_env", env_creator)
+            algo = Algorithm.from_checkpoint(os.path.abspath("./satellite_checkpoints"))
+            print("MAPPO 載入完成")
+
+        tx_costs, fulfill_rates, times = run_mode(
+            mode, USER_NUMBERS, NUM_EPISODES, algo=algo)
+
+    # plot_results(USER_NUMBERS, {MODE: (tx_costs, fulfill_rates)})
     ray.shutdown()
+
 
 if __name__ == "__main__":
     main()

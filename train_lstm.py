@@ -1,6 +1,8 @@
 import os
 import numpy as np
+import sys
 import csv
+from param import *
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -19,12 +21,8 @@ import torch.nn as nn
 from ray.rllib.models import ModelCatalog
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 
-import torch
-import torch.nn as nn
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
-import numpy as np
 
-class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
+class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         super().__init__(obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
@@ -117,13 +115,82 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
         global_features = torch.cat([global_buf, global_cv_features], dim=1)
         return self.critic_mlp(global_features).squeeze(-1)
     
+class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
+    def __init__(self, obs_space, action_space, num_outputs, model_config, name):
+        super().__init__(obs_space, action_space, num_outputs, model_config, name)
+        nn.Module.__init__(self)
+
+        # 動態計算輸入維度 (攤平後的長度)
+        local_obs_space = obs_space.original_space["local_obs"]
+        global_state_space = obs_space.original_space["global_state"]
+        
+        local_dim = np.prod(local_obs_space["buffers"].shape) + np.prod(local_obs_space["contact_volumes"].shape)
+        global_dim = np.prod(global_state_space["buffers"].shape) + np.prod(global_state_space["contact_volumes"].shape)
+
+        # 【核心 1】: Local Actor 網路 (只吃 local_dim)
+        self.actor = nn.Sequential(
+            nn.Linear(local_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_outputs) # 輸出流量分配比例
+        )
+
+        # 【核心 2】: Global Critic 網路 (只吃 global_dim)
+        self.critic = nn.Sequential(
+            nn.Linear(global_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1) # 輸出全局 Value 評分
+        )
+        
+        self._last_global_state = None # 暫存區，用來給 Critic 訓練
+
+    def forward(self, input_dict, state, seq_lens):
+        """執行階段：衛星呼叫 Actor 做出決策"""
+        # 1. 提取 Local Obs 並攤平成 1D 向量
+        local_buf = input_dict["obs"]["local_obs"]["buffers"]
+        local_cv = input_dict["obs"]["local_obs"]["contact_volumes"]
+        
+        local_buf_flat = local_buf.reshape(local_buf.shape[0], -1)
+        local_cv_flat = local_cv.reshape(local_cv.shape[0], -1)
+        local_features = torch.cat([local_buf_flat, local_cv_flat], dim=1)
+
+        # 2. 偷偷把 Global State 存起來，供等一下 Critic 訓練使用
+        self._last_global_state = input_dict["obs"]["global_state"]
+
+        # 3. Actor 僅憑 Local 資訊給出動作
+        action_logits = self.actor(local_features)
+        return action_logits, state
+
+    def value_function(self):
+        """訓練階段: Critic 拿上帝視角評估剛剛的表現"""
+        global_buf = self._last_global_state["buffers"]
+        global_cv = self._last_global_state["contact_volumes"]
+        
+        global_buf_flat = global_buf.reshape(global_buf.shape[0], -1)
+        global_cv_flat = global_cv.reshape(global_cv.shape[0], -1)
+        global_features = torch.cat([global_buf_flat, global_cv_flat], dim=1)
+
+        # Critic 憑藉 Global 資訊給出分數
+        return self.critic(global_features).squeeze(-1)
+
+
 # =====================================================================
 # 2. 拉格朗日回呼函數：實作 CMARL 約束
 # =====================================================================
-T_MAX = 80
+"""
+starlink: k = 20, Tmax = 50
+oneweb: k = 60, Tmax = 50
+"""
+T_MAX = 50
 N_TRAIN_ITER = 300
-LAMBDA_W = 1e-4
-IS_MYOTIC = False
+LAMBDA_W = 1.0
+IS_MYOTIC = True if len(sys.argv) == 2 else False
+TARGET_K = 60
+
+print("IS_MYOTIC:", IS_MYOTIC)
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
@@ -132,7 +199,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         self.target_e = 0.2       # 超時率必須 <= 20%
         self.lr_lambda = 1e-4      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
         self.T_max = T_MAX
-        self.max_lambda = 5e-3
+        self.max_lambda = 2.0
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation
@@ -192,8 +259,18 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # =====================================================================
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
+
+MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
+
+if MY_CONST_NAME == "oneweb":
+    MY_CONST_PARAM = ONEWEB_GEN1
+elif MY_CONST_NAME == "starlink":
+    MY_CONST_PARAM = STARLINK_S2
+else:
+    MY_CONSST_PARAM = TELESAT_P1
+
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -202,10 +279,13 @@ def main():
     # 註冊環境與模型
     env_name = "satellite_nc_env"
     register_env(env_name, env_creator)
-    ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+    if not IS_MYOTIC:
+        ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+    else:
+        ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     # 取得空間大小
-    dummy_env = SatelliteDataDisseminationEnv(T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    dummy_env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)
@@ -267,14 +347,14 @@ def main():
     algo = config.build_algo()
     print("神經網路 (CTDE) 建構完成，開始訓練！")
 
-    checkpoint_dir = "./satellite_checkpoints"
+    checkpoint_dir = "./satellite_checkpoints" if not IS_MYOTIC else "./satellite_myotic_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # write training log
     # ==========================================
     # 【新增】：建立並打開 CSV 檔案，準備記錄數據
     # ==========================================
-    log_file_path = os.path.join(checkpoint_dir, "training_log_home.csv")
+    log_file_path = os.path.join(checkpoint_dir, f"training_log_{MY_CONST_NAME}.csv")
     csv_file = open(log_file_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
     # 寫入標題列 (Headers)

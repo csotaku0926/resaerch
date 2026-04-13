@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import csv
+from param import *
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -85,7 +86,7 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 # =====================================================================
 T_MAX = 80
 N_TRAIN_ITER = 300
-LAMBDA_W = 1e-4
+LAMBDA_W = 1.0
 IS_MYOTIC = True
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
@@ -95,7 +96,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         self.target_e = 0.2       # 超時率必須 <= 20%
         self.lr_lambda = 1e-4      # lambda = 10, lr = 0.1, Tmax=80, 300 iter --> ~50 iter
         self.T_max = T_MAX
-        self.max_lambda = 5e-3
+        self.max_lambda = 2.0
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # 讀取環境最後一步回傳的 is_violation
@@ -154,8 +155,9 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # =====================================================================
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
+MY_CONST_PARAM = STARLINK_S2
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -167,7 +169,7 @@ def main():
     ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     # 取得空間大小
-    dummy_env = SatelliteDataDisseminationEnv(T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    dummy_env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)

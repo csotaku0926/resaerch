@@ -3,12 +3,12 @@ from pettingzoo.utils.env import ParallelEnv
 from gymnasium.spaces import Box, Dict
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load
-from Constellation import Constellation
+from Constellation import *
 
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, num_neighbors=4, num_grids=1, T_max=90, num_users=10, lambda_w=0,
+    def __init__(self, const_param: Const_Param, num_neighbors=4, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
                  is_ORNC=False, is_ERNC=False, is_myotic=False):
         super().__init__()
 
@@ -19,12 +19,17 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.M = num_neighbors  # 鄰居數量 (Intra-tier)
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)
         self.Tw = 2             # time window for contact volume
+
+        self.target_k = target_k
         
         if (is_myotic): self.Tw = 1
 
-        self.constellation = Constellation(t_max=T_max, num_users=num_users)
+        self.constellation = Constellation(param=const_param, t_max=T_max, num_users=num_users, target_k=target_k)
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
+
+        self.PROGRESS_SCALE = 10.0
+        self.COST_SCALE = 0.1
 
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
         self.is_ORNC_baseline = is_ORNC
@@ -34,6 +39,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 加入這兩行 (PettingZoo 鐵規則)
         self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
         self.agents = self.possible_agents[:]
+
+        self.tx_cost_avg = {}
+        for agent_name in self.agents:
+            self.tx_cost_avg[agent_name] = 0.0
 
         # 2. 定義動作空間 (Action Space) - 連續變數
         # 每個 LEO 輸出一個長度為 M+1 的陣列，範圍 [0, 1]，代表流量分配比例
@@ -89,7 +98,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         # 這裡重置你的 LEO buffers 與地面的 received_dof
         self.constellation.reset()
-        
+
+        for agent_name in self.agents:
+            self.tx_cost_avg[agent_name] = 0.0
+
         # 取得初始觀測值
         # 【效能優化】：在這裡統一算一次全局狀態
         current_global_state = self.state()
@@ -129,6 +141,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         rewards = {}
         ft = self.constellation.get_finish_time_cost()
 
+        max_buf = self.constellation.get_leo_max_buffer()
+
+        all_done = bool(self.check_all_grids_fulfilled())
+        is_truncated = bool(self.current_step >= self.T_max - 1)
+        is_done = all_done or is_truncated
+        
         for agent_name in self.agents:
             # name_i = agent_i.name
             i = self.constellation.get_id_by_name(agent_name)
@@ -148,15 +166,14 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
             desired_flows = action_probs * self.constellation.get_leo_buffer(i)
 
-
             # if (self.is_ERNC_baseline):
             #     desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)
             
             # --- 套用物理拘束 (Contact Volume) ---
             # Intra-tier (給鄰居)
-            max_buf = self.constellation.get_leo_max_buffer()
             acc_cost = 0.0
             acc_max_cost = 0.0
+            
             for j, agent_j in enumerate(self.constellation.get_neighbors(i)):
                 contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
                 actual_flow = min(desired_flows[j], contact_capacity)
@@ -173,29 +190,43 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             acc_max_cost += max_buf
 
             # rewards[agent_name] -= actual_flow / max_buf (X)
-            rewards[agent_name] -= acc_cost / acc_max_cost / self.reward_factor
+            # too large...
+            # rewards[agent_name] -= acc_cost / acc_max_cost / self.reward_factor
+            self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
             self.episode_tx_cost += actual_flow
+
+            # 在 step() 裡，下載前先記錄舊進度
+            old_fulfill = self.constellation.get_user_fulfill_percent()
 
             # for g in range(self.constellation.get_visible_grids(i)):
             self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
 
+            # 計算進度增量 → 這才是真正的正向信號
+            new_fulfill = self.constellation.get_user_fulfill_percent()
+            delta_fulfill = new_fulfill - old_fulfill
+
+            rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
+            # rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
+
             # time cost
-            rewards[agent_name] -= 1 / self.reward_factor_time
+            rewards[agent_name] -= 1 / self.T_max #self.reward_factor_time
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         # update finish time
         self.constellation.set_finish_time(self.current_step)
-        all_done = bool(self.check_all_grids_fulfilled())
         cost = float(1.0 - self.constellation.get_user_fulfill_percent())
-        is_truncated = bool(self.current_step >= self.T_max - 1)
-        is_done = all_done or is_truncated
         terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         is_violation = 1.0 if (is_truncated and not all_done) else 0.0
 
-        # if is_violation:
-        for agent_name in self.agents:
-            rewards[agent_name] -= self.current_lambda * cost
+        if all_done:
+            for agent_name in self.agents:
+                rewards[agent_name] += 50.0    
+
+        if is_done:
+            for agent_name in self.agents:
+                rewards[agent_name] -= self.current_lambda * cost
+                rewards[agent_name] -= self.COST_SCALE * (self.tx_cost_avg[agent_name] / self.current_step)
         
         # 5. 更新狀態
         self.current_step += 1

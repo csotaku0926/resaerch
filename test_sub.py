@@ -5,13 +5,15 @@ import numpy as np
 from datetime import timedelta
 from skyfield.api import load
 from Constellation import Constellation
+from param import *
 
-TMAX = 30
+TMAX = 90
 N_USER = 170
+TARGET_K = 40
 
 def check_roi_coverage(T_max=100):
     print("初始化星系與網格 (這會花幾秒鐘)...")
-    env = Constellation(step_seconds=10, num_users=N_USER)
+    env = Constellation(const_param=ONEWEB_GEN1, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
     
     ts = load.timescale()
     start_dt = env.agents[0].skyfield_sat.epoch.utc_datetime()
@@ -46,7 +48,7 @@ def run_diagnostic(T_max=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(T_max=T_max, num_users=N_USER)
+    env = SatelliteDataDisseminationEnv(const_param=ONEWEB_GEN1, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
     obs, info = env.reset()
     
     # 獲取初始參數
