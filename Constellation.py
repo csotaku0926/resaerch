@@ -419,7 +419,7 @@ class Constellation:
         # 這裡沒有武斷的 step，只有平滑的機率轉換
         # =============================================================
         # 假設 SNR_THRESHOLD 是 5.0 dB (低於這個值，掉包率開始急劇上升)
-        SNR_THRESHOLD = 5.0
+        SNR_THRESHOLD = 8.0
         
         # 將 SNR 的差距轉換為 Erasure Rate (範圍 0~1)
         # 使用 sigmoid 函數： 1 / (1 + exp(k * (x - x0)))
@@ -428,6 +428,7 @@ class Constellation:
         erasure_rate = 1.0 / (1.0 + np.exp(steepness * (snr_db - SNR_THRESHOLD)))
         final_erasure = np.clip(erasure_rate, 0.0, 1.0)
         
+        # print(elevation_rad, final_erasure)
         return float(final_erasure)
 
     def download_to_grid(self, agent_id:int, amount, current_time):

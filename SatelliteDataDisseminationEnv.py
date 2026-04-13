@@ -8,7 +8,7 @@ from Constellation import *
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, const_param: Const_Param, num_neighbors=4, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
+    def __init__(self, const_param: Const_Param, num_neighbors=1, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
                  is_ORNC=False, is_ERNC=False, is_myotic=False):
         super().__init__()
 
@@ -29,7 +29,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.current_lambda = lambda_w
 
         self.PROGRESS_SCALE = 10.0
-        self.COST_SCALE = 0.1
+        self.COST_SCALE = 1.0
 
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
         self.is_ORNC_baseline = is_ORNC
@@ -108,6 +108,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         current_time = self.ts.from_datetime(self.start_dt)
         observations = {
             agent_name: {
+            "action_mask" : np.zeros(self.M + 1, dtype=np.float32),
             "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), current_time),
             "global_state" : current_global_state 
             } for agent_name in self.agents
@@ -173,11 +174,20 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # Intra-tier (給鄰居)
             acc_cost = 0.0
             acc_max_cost = 0.0
+
+            # 【補救核心】：現場重新計算 Action Mask，並強制攔截無效動作
+            action_mask = np.zeros(self.M + 1, dtype=np.float32)
             
-            for j, agent_j in enumerate(self.constellation.get_neighbors(i)):
-                contact_capacity = self.constellation.get_ISL_capacity(i, j, current_time)
-                actual_flow = min(desired_flows[j], contact_capacity)
-                self.constellation.transfer_buffer(sat_id=i, neighbor=j, amount=actual_flow)
+            for j, agent_j in enumerate([self.constellation.get_neighbors(i)[0]]):
+                
+                if self.constellation.get_ISL_capacity(i, agent_j, current_time) > 0:
+                    teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
+                    if np.sum(teg_j) > 0:  
+                        action_mask[j] = 1.0
+                
+                contact_capacity = self.constellation.get_ISL_capacity(i, agent_j, current_time)
+                actual_flow = action_probs[j] * contact_capacity * action_mask[j] #min(desired_flows[j], contact_capacity) * action_mask[j]
+                self.constellation.transfer_buffer(sat_id=i, neighbor=agent_j, amount=actual_flow)
                 # count in "actual_flow"
                 acc_cost += actual_flow
                 acc_max_cost += max_buf
@@ -185,7 +195,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
-            actual_flow = min(desired_flows[self.M], contact_capacity)
+            if len(self.constellation.get_visible_grids(i, current_time)) > 0:
+                if self.constellation.get_downlink_capacity() > 0:
+                    action_mask[self.M] = 1.0
+
+            actual_flow = action_probs[self.M] * contact_capacity * action_mask[self.M] #min(desired_flows[self.M], contact_capacity)
             acc_cost += actual_flow
             acc_max_cost += max_buf
 
@@ -206,7 +220,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             delta_fulfill = new_fulfill - old_fulfill
 
             rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
-            # rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
+            rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
 
             # time cost
             rewards[agent_name] -= 1 / self.T_max #self.reward_factor_time
@@ -226,7 +240,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         if is_done:
             for agent_name in self.agents:
                 rewards[agent_name] -= self.current_lambda * cost
-                rewards[agent_name] -= self.COST_SCALE * (self.tx_cost_avg[agent_name] / self.current_step)
+                rewards[agent_name] -= self.COST_SCALE * (self.tx_cost_avg[agent_name] / self.T_max)
         
         # 5. 更新狀態
         self.current_step += 1
@@ -239,6 +253,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         observations = {
             agent_name: {
+            "action_mask" : action_mask,
             "local_obs" : self._get_obs(self.constellation.get_id_by_name(agent_name), next_time),
             "global_state" : current_global_state 
             } for agent_name in self.agents
@@ -296,6 +311,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # return np.array(global_state, dtype=np.float32)
         return {
+            # "action_mask": 
             "buffers": np.array(global_buf, dtype=np.float32),
             "contact_volumes": np.array(global_cv, dtype=np.float32)
         }
@@ -310,7 +326,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         norm_buf = np.clip(buf / max_buf, 0.0, 1.0)
         bufs = [norm_buf]
 
-        for j in self.constellation.get_neighbors(agent_id):
+        for j in [self.constellation.get_neighbors(agent_id)[0]]:
             buf_j = self.constellation.get_leo_buffer(j)
             norm_buf_j = np.clip(buf_j / max_buf, 0.0, 1.0)
             bufs.append(norm_buf_j)
@@ -326,7 +342,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         cv_matrix[0, :] = my_teg
         
         # 填入鄰居的 TEG
-        for idx, j in enumerate(self.constellation.get_neighbors(agent_id)):
+        for idx, j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
             # grids_j = self.constellation.get_visible_grids(j, current_time)
             teg_j = self.constellation.get_teg_downlink_volume(j, self.Tw, current_time)
             cv_matrix[idx + 1, :] = teg_j
@@ -335,11 +351,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         action_mask = np.zeros(self.M + 1, dtype=np.float32)
         
         # 1. 檢查鄰居 (ISL) 是否活著
-        for idx, j in enumerate(self.constellation.get_neighbors(agent_id)):
+        for idx, j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
             if self.constellation.get_ISL_capacity(agent_id, j, current_time) > 0:
                 action_mask[idx] = 1.0
                 
-        # 2. 檢查對地 (Downlink) 是否活著
+        # # 2. 檢查對地 (Downlink) 是否活著
         if len(self.constellation.get_visible_grids(agent_id, current_time)) > 0:
             if self.constellation.get_downlink_capacity() > 0:
                 action_mask[self.M] = 1.0

@@ -7,13 +7,14 @@ from skyfield.api import load
 from Constellation import Constellation
 from param import *
 
-TMAX = 90
+TMAX = 40
 N_USER = 170
-TARGET_K = 40
+TARGET_K = 10
+CONST_ = ONEWEB_GEN1
 
 def check_roi_coverage(T_max=100):
     print("初始化星系與網格 (這會花幾秒鐘)...")
-    env = Constellation(const_param=ONEWEB_GEN1, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
+    env = Constellation(const_param=CONST_, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
     
     ts = load.timescale()
     start_dt = env.agents[0].skyfield_sat.epoch.utc_datetime()
@@ -48,7 +49,7 @@ def run_diagnostic(T_max=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=ONEWEB_GEN1, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
     obs, info = env.reset()
     
     # 獲取初始參數
@@ -68,20 +69,20 @@ def run_diagnostic(T_max=100):
     print("-" * 30)
 
     # 2. 測試：如果所有衛星「完全躺平」(零動作)
-    print("[測試 1: 零動作測試 (純觀察 MEO 補給與時間流逝)]")
-    for s in range(5):
-        # 建立全 0 的動作 (不傳輸任何資料)
-        actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32) 
-                   for agent in env.agents}
-        obs, rewards, terms, truncs, infos = env.step(actions)
+    # print("[測試 1: 零動作測試 (純觀察 MEO 補給與時間流逝)]")
+    # for s in range(5):
+    #     # 建立全 0 的動作 (不傳輸任何資料)
+    #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32) 
+    #                for agent in env.agents}
+    #     obs, rewards, terms, truncs, infos = env.step(actions)
         
-        fulfill = env.constellation.get_user_fulfill_percent()
-        # 看看 MEO 有沒有把 LEO 的 Buffer 填滿
-        total_buffer = sum([env.constellation.get_leo_buffer(i) for i in range(n_agents)])
+    #     fulfill = env.constellation.get_user_fulfill_percent()
+    #     # 看看 MEO 有沒有把 LEO 的 Buffer 填滿
+    #     total_buffer = sum([env.constellation.get_leo_buffer(i) for i in range(n_agents)])
         
-        print(f"Step {s+1} | 全網總 Buffer: {total_buffer} packet | 完成度: {fulfill:.2%}")
+    #     print(f"Step {s+1} | 全網總 Buffer: {total_buffer} packet | 完成度: {fulfill:.2%}")
 
-    print("-" * 30)
+    # print("-" * 30)
 
     # 3. 測試：如果所有衛星「全力輸出」(動作設為 1)
     print("[測試 2: 最大輸出測試 (確認產力上限)]")

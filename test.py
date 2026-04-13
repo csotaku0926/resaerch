@@ -25,12 +25,23 @@ from param import *
 # ── 執行設定 ──────────────────────────────────────
 # MODE         = "ERNC"          # "MAPPO" | "GREEDY" | "ERNC" | "STATIC_R"
 USER_NUMBERS = [10, 50, 90, 130, 170, 210]
-NUM_EPISODES = 10
-TARGET_K = 20
-CONST_PARAM = STARLINK_S2
-T_MAX = 50
+NUM_EPISODES = 3
+# TARGET_K = 10
+# MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
+# T_MAX = 40
+print(f"[參數確認]")
+print(f"- 衛星 const: {MY_CONST_NAME}")
+print(f"- 最大步數 (T_max): {T_MAX}")
+print(f"- target K: {TARGET_K}")
+print("-" * 30)
 # ─────────────────────────────────────────────────
 
+if MY_CONST_NAME == "oneweb":
+    CONST_PARAM = ONEWEB_GEN1
+elif MY_CONST_NAME == "starlink":
+    CONST_PARAM = STARLINK_S2
+else:
+    CONSST_PARAM = TELESAT_P1
 
 def current_skyfield_time(actual_env):
     dt = actual_env.start_dt + timedelta(
@@ -181,7 +192,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
     avg_fulfill_rates = []
     avg_comp_times    = []
 
-    checkpoint_dir = "./satellite_checkpoints"
+    checkpoint_dir = f"./satellite_{MY_CONST_NAME}_checkpoints"
     if write_log:
         os.makedirs(checkpoint_dir, exist_ok=True)
         log_file_path = os.path.join(checkpoint_dir, f"{mode}_test_log.csv")
@@ -229,9 +240,12 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
                             policy_id="shared_policy",
                             explore=False)
 
+                        # print(actions[agent_id])
+
                     elif mode == "GREEDY":
                         actions[agent_id] = action_greedy_rlnc(
                             real_id, actual_env, current_time)
+                        # print(actions[agent_id])
 
                     elif mode == "ERNC":
                         actions[agent_id] = action_ernc(
@@ -316,7 +330,7 @@ def main():
 
     algo = None
 
-    for mode in ["MAPPO"]: # "MAPPO" | "GREEDY" | "ERNC" | "STATIC_R"
+    for mode in ["GREEDY"]: # "MAPPO" , "GREEDY" , "ERNC" , "STATIC_R"
 
         if mode == "MAPPO":
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
@@ -325,7 +339,7 @@ def main():
                     SatelliteDataDisseminationEnv(
                         const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10)))
             register_env("satellite_nc_env", env_creator)
-            algo = Algorithm.from_checkpoint(os.path.abspath("./satellite_checkpoints"))
+            algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_checkpoints"))
             print("MAPPO 載入完成")
 
         tx_costs, fulfill_rates, times = run_mode(

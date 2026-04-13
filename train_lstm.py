@@ -184,13 +184,27 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 starlink: k = 20, Tmax = 50
 oneweb: k = 60, Tmax = 50
 """
-T_MAX = 50
-N_TRAIN_ITER = 300
+T_MAX = 40
+N_TRAIN_ITER = 200
 LAMBDA_W = 1.0
 IS_MYOTIC = True if len(sys.argv) == 2 else False
-TARGET_K = 60
+TARGET_K = 10
+MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
 
+if MY_CONST_NAME == "oneweb":
+    MY_CONST_PARAM = ONEWEB_GEN1
+elif MY_CONST_NAME == "starlink":
+    MY_CONST_PARAM = STARLINK_S2
+else:
+    MY_CONSST_PARAM = TELESAT_P1
+
+print(f"[參數確認]")
+print(f"- 衛星 const: {MY_CONST_NAME}")
+print(f"- 最大步數 (T_max): {T_MAX}")
+print(f"- target K: {TARGET_K}")
 print("IS_MYOTIC:", IS_MYOTIC)
+print("-" * 30)
+
 
 class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
@@ -260,14 +274,6 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
 
-MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
-
-if MY_CONST_NAME == "oneweb":
-    MY_CONST_PARAM = ONEWEB_GEN1
-elif MY_CONST_NAME == "starlink":
-    MY_CONST_PARAM = STARLINK_S2
-else:
-    MY_CONSST_PARAM = TELESAT_P1
 
 def env_creator(args):
     env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
@@ -347,7 +353,7 @@ def main():
     algo = config.build_algo()
     print("神經網路 (CTDE) 建構完成，開始訓練！")
 
-    checkpoint_dir = "./satellite_checkpoints" if not IS_MYOTIC else "./satellite_myotic_checkpoints"
+    checkpoint_dir = f"./satellite_{MY_CONST_NAME}_checkpoints" if not IS_MYOTIC else f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # write training log
