@@ -42,6 +42,39 @@ if os.path.exists(file_myotic):
 else:
     print(f"Warning: Cannot find {file_myotic}")
 
+# --- Plot 'Baseline' (Horizontal Line) ---
+
+BASELINE_FILES = [file_ERNC, file_GREEDY, file_STATIC]
+COLORS = ["orange", "gray", "green"]
+BL_NAMES = ['Opportunistic ERNC', 'Greedy Baseline', 'Static ERNC']
+# comp_time is problematic...
+TMP_TIME = [26.5, 28.0, 27.5]
+
+for i, bl in enumerate(BASELINE_FILES):
+    if (METRICS == "Reward"):
+        print("Reward is chosen. skipping baselines")
+        break
+
+    if os.path.exists(bl):
+        df_baseline = pd.read_csv(bl)
+        
+        # 萃取你要的單一數值
+        # 假設你的 CSV 裡面那個欄位叫做 'Reward'，並且你取第一筆資料：
+        # (如果是別的欄位名稱，請把 'Reward' 換掉)
+        baseline_value = df_baseline[METRICS].iloc[0] 
+        
+        # 如果裡面有多行數據，你也可以選擇取平均值：
+        # baseline_value = df_baseline['Reward'].mean()
+
+        # 使用 axhline 畫出一條貫穿整張圖的水平直線
+        plt.axhline(y=baseline_value, 
+                    color=COLORS[i],          # 設定顏色
+                    linestyle='--',         # 設定為虛線 (dashed line)
+                    linewidth=2,            # 線條粗細
+                    label=BL_NAMES[i])       # 圖例名稱
+    else:
+        print(f"Warning: Cannot find {bl}")
+
 # ==========================================
 # 3. Chart Formatting (English Only, Default Font)
 # ==========================================
@@ -49,7 +82,7 @@ plt.xlabel('Iteration')
 plt.ylabel(YLAB)
 
 # Add legend to distinguish algorithms
-plt.legend(title='Algorithm', loc='lower right')
+plt.legend(title='Algorithm', loc='best')
 
 # Add grid for better readability
 plt.grid(True, linestyle='--', alpha=0.6)

@@ -132,7 +132,7 @@ def action_ernc(real_id, actual_env, current_time):
 # ║    不看當前 buffer 大小、不看 deficit、不用 ISL      ║
 # ║    N* 在整個測試過程中不變                           ║
 # ╚══════════════════════════════════════════════════════╝
-def compute_n_star(actual_env, safety_margin=0.2):
+def compute_n_star(actual_env, safety_margin=0.3):
     """
     離線估算 N*：對軌道多個時刻取樣，
     算出所有衛星對所有用戶的平均 erasure rate p̄，
@@ -147,7 +147,7 @@ def compute_n_star(actual_env, safety_margin=0.2):
     step_sec      = actual_env.step_seconds
 
     erasure_samples = []
-    sample_steps = np.linspace(0, actual_env.T_max - 1, 30, dtype=int)
+    sample_steps = np.linspace(0, actual_env.T_max - 1, 10, dtype=int)
 
     for s in sample_steps:
         dt = start_dt + timedelta(seconds=int(s) * step_sec)
@@ -181,16 +181,6 @@ def action_static_r(real_id, actual_env, current_time, n_star):
     cap_dl  = constellation.get_downlink_capacity()
 
     if len(visible) == 0 or buf == 0: return action
-
-    # --- 關鍵修正：只在仰角大於 10 度時才開始執行靜態預算 ---
-    # 這樣可以模擬論文中「尋找最優 m 因子」的精神，避開極惡劣通道
-    sat = constellation.agents[real_id].skyfield_sat
-    grid = constellation.user_grids[visible[0]]
-    alt, _, _ = (sat - grid.center_position).at(current_time).altaz()
-    
-    if alt.degrees < 10.0:
-        return action # 仰角太低，把封包存著，這才是 Static-R 該有的策略
-    # ---------------------------------------------------
 
     target_flow = min(n_star, cap_dl, buf)
     action[M]   = float(np.clip(target_flow / cap_dl, 0.0, 1.0))
