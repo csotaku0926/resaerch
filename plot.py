@@ -1,27 +1,23 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+from param import *
 
 # ==========================================
 # 1. 基礎設定與檔案讀取
 # ==========================================
-# 設定中文字體，避免圖表上的中文變成方塊亂碼
-# Windows 使用 'Microsoft JhengHei' (微軟正黑體)
-# Mac 使用 'Arial Unicode MS' 或 'PingFang HK'
-# plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] 
-# plt.rcParams['axes.unicode_minus'] = False
-
 # 定義你的演算法標籤與對應的 CSV 檔案名稱
 # 假設你的檔案分別命名為以下名稱，請依照實際檔名修改
 algorithm_files = {
     'Greedy Baseline': 'GREEDY_test_log.csv',
-    # 'Static ERNC': 'STATIC_R_test_log.csv',
-    # 'Opportunistic ERNC': 'ERNC_test_log.csv',
-    # 'Proposed MARL (Ours)': 'my_algo.csv'
+    'Static ERNC': 'STATIC_R_test_log.csv',
+    'Opportunistic ERNC': 'ERNC_test_log.csv',
+    'Myotic MARL': 'MYOTIC_test_log.csv',
+    'Proposed MARL (Ours)': 'MAPPO_test_log.csv'
 }
 
 # 讀取所有 CSV 檔案並存入字典中
-dir_name = "satellite_checkpoints/"
+dir_name = f"satellite_{MY_CONST_NAME}_checkpoints/"
 data_dict = {}
 for algo_name, file_ in algorithm_files.items():
     file_name = os.path.join(dir_name, file_)
@@ -57,7 +53,8 @@ styles = {
     'Greedy Baseline': {'color': 'gray', 'marker': 'x', 'linestyle': '--'},
     'Static ERNC': {'color': 'green', 'marker': 's', 'linestyle': '-.'},
     'Opportunistic ERNC': {'color': 'orange', 'marker': '^', 'linestyle': ':'},
-    'Proposed MARL (Ours)': {'color': 'red', 'marker': 'o', 'linestyle': '-'}
+    'Myotic MARL': {'color': 'red', 'marker': 'o', 'linestyle': '-'},
+    'Proposed MARL (Ours)': {'color': 'blue', 'marker': 'o', 'linestyle': '-'}
 }
 
 # ==========================================
@@ -83,7 +80,7 @@ for metric, labels in metrics_to_plot.items():
             print(f"警告：{algo_name} 的資料中找不到欄位 {metric} 或 {x_column}")
 
     # 設定圖表細節
-    plt.title(labels['title'], fontsize=14, fontweight='bold')
+    # plt.title(labels['title'], fontsize=14, fontweight='bold')
     plt.xlabel('Number of Users', fontsize=12)
     plt.ylabel(labels['ylabel'], fontsize=12)
     
@@ -98,7 +95,8 @@ for metric, labels in metrics_to_plot.items():
     plt.tight_layout()
     
     # 儲存圖片 (高解析度 300 dpi 適合放進論文)
-    save_filename = f"Result_{metric}.png"
+    save_filename = f"fig/Result_{MY_CONST_NAME}_{metric}.png"
+    os.makedirs("fig", exist_ok=True)
     plt.savefig(save_filename, dpi=300)
     print(f"已儲存圖表：{save_filename}")
     

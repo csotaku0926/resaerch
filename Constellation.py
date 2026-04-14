@@ -29,7 +29,7 @@ class Constellation:
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
-                 step_seconds=10, t_max=90, target_k=20):
+                 step_seconds=40, t_max=90, target_k=20):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
         self.inc = param.inc       # 傾角 (度)
@@ -374,8 +374,12 @@ class Constellation:
         # 6. 轉換為封包數 (假設 1 個 NC 封包是 10 MB = 80 Mbits)
         # packet_size_bits = 80e6
         max_packets = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
-        
-        return 2 #int(max_packets)
+
+        # user amount counts..
+        # user_num = self.users_per_grid
+        # user_factor = max(1.0, user_num / 10.0)
+
+        return 5 #int(max_packets)
 
     def calculate_erasure_rate(self, agent_id: int, user: User, current_time):
         """
@@ -428,6 +432,22 @@ class Constellation:
         steepness = 1.5 
         erasure_rate = 1.0 / (1.0 + np.exp(steepness * (snr_db - SNR_THRESHOLD)))
         final_erasure = np.clip(erasure_rate, 0.0, 1.0)
+
+        # ==========================================
+        # 🌪️ [關鍵新增] 突發狀況：週期性極端氣候遮蔽 (Deterministic Blockage)
+        # ==========================================
+        dt = current_time.utc_datetime()
+        minute = dt.minute
+        second = dt.second
+        
+        # 陷阱設計：每分鐘的 第 20 秒 到 50 秒，會有一場嚴重的通訊遮蔽
+        # print(second)
+        in_weather_event = (20 <= second <= 50)
+        
+        # 為了強迫 AI 使用 ISL 協作，我們讓這場風暴「只襲擊偶數號衛星」，奇數號天氣晴朗
+        if in_weather_event and (agent_id % 2 == 0):
+            # print("boom")
+            return 0.99  # 突發 99% 掉包率 (通道幾乎全毀)
         
         # print(elevation_rad, final_erasure)
         return float(final_erasure)

@@ -7,7 +7,7 @@ from skyfield.api import load
 from Constellation import Constellation
 from param import *
 
-N_USER = 170
+N_USER = 50
 CONST_ = CONST_PARAM
 TMAX = CONST_.t_max
 TARGET_K = CONST_.target_k
@@ -94,6 +94,9 @@ def run_diagnostic(T_max=100):
                    for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
         
+        # print("TEG:")
+        # for agent in env.agents:
+        #     print(env.constellation.get_teg_downlink_volume(env.constellation.get_id_by_name(agent), 2, s))
         fulfill = env.constellation.get_user_fulfill_percent()
         recvd = env.constellation.get_user_received_percent()
         violated = infos['Starlink_Shell2_0_0']["is_violation"]

@@ -9,7 +9,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
     def __init__(self, const_param: Const_Param, num_neighbors=1, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
-                 is_ORNC=False, is_ERNC=False, is_myotic=False):
+                 is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=40):
         super().__init__()
 
         # 1. 定義 param
@@ -21,10 +21,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.Tw = 2             # time window for contact volume
 
         self.target_k = target_k
+        self.step_seconds = step_seconds
         
         if (is_myotic): self.Tw = 1
 
-        self.constellation = Constellation(param=const_param, t_max=T_max, num_users=num_users, target_k=target_k)
+        self.constellation = Constellation(param=const_param, t_max=T_max, num_users=num_users, target_k=target_k, step_seconds=step_seconds)
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
 
@@ -78,7 +79,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # 初始化 Skyfield 時間與環境參數
         self.ts = load.timescale()
-        self.step_seconds = 10
         self.current_step = 0
         self.episode_tx_cost = 0.0
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
@@ -349,6 +349,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # action mask
         action_mask = np.zeros(self.M + 1, dtype=np.float32)
+
+        # if (np.any(cv_matrix)):
+        #     print(cv_matrix)
         
         # 1. 檢查鄰居 (ISL) 是否活著
         for idx, j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
