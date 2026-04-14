@@ -184,19 +184,23 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 starlink: k = 20, Tmax = 50
 oneweb: k = 60, Tmax = 50
 """
-T_MAX = 40
+# assert len(sys.argv) == 2, "usage: python3 test.py <const_mode>"
+# MY_CONST_NAME = sys.argv[1] # oneweb | starlink | telesat
+
+# if MY_CONST_NAME == "oneweb":
+#     MY_CONST_PARAM = ONEWEB_GEN1
+# elif MY_CONST_NAME == "starlink":
+#     MY_CONST_PARAM = STARLINK_S2
+# else:
+#     MY_CONST_PARAM = TELESAT_P1
+
+MY_CONST_PARAM = CONST_PARAM
+
+T_MAX = MY_CONST_PARAM.t_max
 N_TRAIN_ITER = 200
 LAMBDA_W = 1.0
-IS_MYOTIC = True if len(sys.argv) == 2 else False
-TARGET_K = 10
-MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
-
-if MY_CONST_NAME == "oneweb":
-    MY_CONST_PARAM = ONEWEB_GEN1
-elif MY_CONST_NAME == "starlink":
-    MY_CONST_PARAM = STARLINK_S2
-else:
-    MY_CONSST_PARAM = TELESAT_P1
+# IS_MYOTIC = True if len(sys.argv) == 2 else False
+TARGET_K = MY_CONST_PARAM.target_k
 
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")

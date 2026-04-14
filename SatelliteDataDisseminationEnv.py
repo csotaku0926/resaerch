@@ -165,7 +165,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 action_probs = raw_action
 
             # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
-            desired_flows = action_probs * self.constellation.get_leo_buffer(i)
+            # desired_flows = action_probs * self.constellation.get_leo_buffer(i)
 
             # if (self.is_ERNC_baseline):
             #     desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)

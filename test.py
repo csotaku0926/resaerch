@@ -29,7 +29,7 @@ USER_NUMBERS = [10, 50, 90, 130, 170, 210]
 NUM_EPISODES = 3
 # TARGET_K = 10
 # MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
-# T_MAX = 40
+T_MAX = 100
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
@@ -37,14 +37,14 @@ print(f"- target K: {TARGET_K}")
 print("-" * 30)
 # ─────────────────────────────────────────────────
 
-assert len(sys.argv) == 2, "usage: python3 test.py <const_mode>"
-MY_CONST_NAME = sys.argv[1]
-if MY_CONST_NAME == "oneweb":
-    CONST_PARAM = ONEWEB_GEN1
-elif MY_CONST_NAME == "starlink":
-    CONST_PARAM = STARLINK_S2
-else:
-    CONSST_PARAM = TELESAT_P1
+# assert len(sys.argv) == 2, "usage: python3 test.py <const_mode>"
+# MY_CONST_NAME = sys.argv[1]
+# if MY_CONST_NAME == "oneweb":
+#     CONST_PARAM = ONEWEB_GEN1
+# elif MY_CONST_NAME == "starlink":
+#     CONST_PARAM = STARLINK_S2
+# else:
+#     CONST_PARAM = TELESAT_P1
 
 def current_skyfield_time(actual_env):
     dt = actual_env.start_dt + timedelta(
@@ -182,7 +182,7 @@ def action_static_r(real_id, actual_env, current_time, n_star):
 
     if len(visible) > 0 and buf > 0:
         target_flow = min(n_star, cap_dl, buf)
-        action[M]   = float(np.clip(target_flow / buf, 0.0, 1.0))
+        action[M]   = float(np.clip(target_flow / cap_dl, 0.0, 1.0))
 
     return action
 
@@ -208,8 +208,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         print(f"\n[{mode}] ══ n_users={n_users} ══")
 
         raw_env = SatelliteDataDisseminationEnv(
-            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users,
-            is_ERNC=False, is_ORNC=False, is_myotic=False)
+            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC")
+        )
         env = ParallelPettingZooEnv(raw_env)
 
         # B3：離線預算 N*，整個 n_users 設定共用一個值
@@ -237,7 +237,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
                 for agent_id, agent_obs in obs.items():
                     real_id = actual_env.constellation.get_id_by_name(agent_id)
 
-                    if mode == "MAPPO":
+                    if mode == "MAPPO" or mode == "MYOTIC":
                         actions[agent_id] = algo.compute_single_action(
                             observation=agent_obs,
                             policy_id="shared_policy",
@@ -333,7 +333,7 @@ def main():
 
     algo = None
 
-    for mode in ["MAPPO"]: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
+    for mode in TEST_MODES: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
         if mode == "MAPPO":
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
@@ -350,7 +350,8 @@ def main():
             def env_creator(cfg):
                 return ParallelPettingZooEnv(
                     SatelliteDataDisseminationEnv(
-                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10)))
+                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10), is_myotic=True
+                ))
             register_env("satellite_nc_env", env_creator)
             algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
             print("MYOTIC 載入完成")

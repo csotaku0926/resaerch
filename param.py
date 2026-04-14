@@ -1,8 +1,20 @@
 from Constellation import *
 # import sys
 
-STARLINK_S2 = Const_Param(alt=540.0, inc=53.2, p=10, s=10, f=17)
-ONEWEB_GEN1 = Const_Param(alt=1200, inc=88, p=18, s=20, f=17) # K = 10, T = 40
-TELESAT_P1 = Const_Param(alt=1325, inc=50.88, p=20, s=11, f=17) # 
+STARLINK_S2 = Const_Param(alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=90, target_k=20)
+ONEWEB_GEN1 = Const_Param(alt=1200, inc=88, p=18, s=20, f=17, t_max=40, target_k=10) # K = 10, T = 40
+TELESAT_P1 = Const_Param(alt=1325, inc=50.88, p=20, s=11, f=17, t_max=50, target_k=10) # 
+
+MY_CONST_NAME = "oneweb"
+IS_MYOTIC = False
+
+if MY_CONST_NAME == "oneweb":
+    CONST_PARAM = ONEWEB_GEN1
+elif MY_CONST_NAME == "starlink":
+    CONST_PARAM = STARLINK_S2
+else:
+    CONST_PARAM = TELESAT_P1
+
+TEST_MODES = ["STATIC_R"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
 # print(sys.argv)

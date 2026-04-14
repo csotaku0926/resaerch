@@ -7,10 +7,10 @@ from skyfield.api import load
 from Constellation import Constellation
 from param import *
 
-TMAX = 100
 N_USER = 170
-TARGET_K = 10
-CONST_ = TELESAT_P1
+CONST_ = CONST_PARAM
+TMAX = CONST_.t_max
+TARGET_K = CONST_.target_k
 
 def check_roi_coverage(T_max=100):
     print("初始化星系與網格 (這會花幾秒鐘)...")

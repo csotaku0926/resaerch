@@ -15,12 +15,14 @@ Telesat:
 OneWeb:
 """
 class Const_Param:
-    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17):
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
         self.s = s                   # 每面衛星數 (Sats per plane)
         self.f = f                   # 相位因子
+        self.t_max = t_max
+        self.target_k = target_k
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
@@ -59,10 +61,10 @@ class Constellation:
         self.packet_size_bits = packet_size_bits
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
-        self.target_k = target_k
+        self.target_k = param.target_k
         self.users_per_grid = num_users
         self.max_covered_grid = 4 # assume at most cover 4 grids per time
-        self.t_max = t_max
+        self.t_max = param.t_max
 
         # 這裡使用簡化的通訊參數
         self.s_freq_hz = 2e9    # S-band 2GHz (for user erasure)
