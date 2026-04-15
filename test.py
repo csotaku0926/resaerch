@@ -53,7 +53,7 @@ def current_skyfield_time(actual_env):
         dt.year, dt.month, dt.day,
         dt.hour, dt.minute, dt.second)
 
-
+# ERNC should swap with Greedy..
 # ╔══════════════════════════════════════════════════════╗
 # ║  B1: Greedy-RLNC                                     ║
 # ║                                                      ║

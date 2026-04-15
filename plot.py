@@ -81,7 +81,7 @@ for metric, labels in metrics_to_plot.items():
 
     # 設定圖表細節
     # plt.title(labels['title'], fontsize=14, fontweight='bold')
-    plt.xlabel('Number of Users', fontsize=12)
+    plt.xlabel('Number of Users per Grid', fontsize=12)
     plt.ylabel(labels['ylabel'], fontsize=12)
     
     # 設定 X 軸刻度只顯示整數 (例如 10, 20, 30...)

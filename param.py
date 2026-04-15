@@ -18,6 +18,6 @@ elif MY_CONST_NAME == 'telesat':
 else:
     CONST_PARAM = TEST_
 
-TEST_MODES = ["MAPPO" , "MYOTIC"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
+TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
 # print(sys.argv)
