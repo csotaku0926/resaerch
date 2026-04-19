@@ -123,12 +123,12 @@ class Constellation:
         for p in range(self.p):
             # 算出該軌道面的升交點赤經 (RAAN)，並轉成弧度
             raan_deg = p * (360.0 / self.p)
-            raan_rad = math.radians(raan_deg) + raan_offset - rewind_rad
+            raan_rad = math.radians(raan_deg) + raan_offset
             
             for s in range(self.s):
                 # 算出該衛星的平近點角 (Mean Anomaly)，並轉成弧度
                 mean_anomaly_deg = (s * (360.0 / self.s)) + (p * self.f * (360.0 / self.t))
-                mean_anomaly_rad = math.radians(mean_anomaly_deg % 360.0)
+                mean_anomaly_rad = math.radians(mean_anomaly_deg % 360.0) - rewind_rad
                 
                 # [核心步驟] 建立 SGP4 核心物件 (Satrec)
                 satrec = Satrec()
@@ -360,34 +360,22 @@ class Constellation:
         # packet_size_bits = 80e6  # 10 MB = 80 Mbits (跟你 LEO 的設定一樣)
         
         # 算出 MEO 在這 10 秒內，總共噴了多少個封包 (DoF)
-        meo_total_packets = (self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
+        meo_total_packets = 0.1 * self.step_seconds #(self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
 
         # 2. 掃描所有的 LEO (Agents)
         for i, agent in enumerate(self.agents):
-            leo_sat = agent.skyfield_sat # 取得 Skyfield 物件
-            meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
+            # leo_sat = agent.skyfield_sat # 取得 Skyfield 物件
+            # meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
             
             # 3. 檢查視距 (Line of Sight) 與仰角
             # 計算 MEO 看 LEO 的相對位置
-            difference = leo_sat - meo_sat
-            # topocentric = difference.at(current_time)
-            distance_km = difference.at(current_time).distance().km
-            # print(distance_km)
-            
-            # 如果 MEO 看 LEO 的仰角大於 0 度 (或者你設定的 min_elevation)
-            # 代表訊號沒有被地球擋住
-            if distance_km < max_dist:
-                # 4. 計算 MEO -> LEO 的掉包率 (Erasure Rate)
-                # 這裡你可以根據 distance.km 寫一個簡單的 SNR 轉換公式，或是給定一個常數
-                # e_rate = self.calculate_meo_to_leo_erasure(distance.km)
-                    
-                # 5. 計算 LEO 實際成功收到的封包數
-                # 廣播優勢：每個 LEO 都是獨立去骰這個掉包率
-                actual_received_packets = meo_total_packets #* (1.0 - e_rate)
-                
-                # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
-                self.transfer_buffer(neighbor=i, amount=actual_received_packets)
-                # print(self.get_leo_buffer(i))
+            # difference = leo_sat - meo_sat
+            # distance_km = difference.at(current_time).distance().km
+            # if distance_km < max_dist:
+
+            # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
+            self.transfer_buffer(neighbor=i, amount=meo_total_packets)
+            # print(self.get_leo_buffer(i))
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
         sat = self.agents[agent_id].skyfield_sat
@@ -491,12 +479,12 @@ class Constellation:
         grid_is = self.get_visible_grids(agent_id, current_time)
 
         # sat = self.agents[agent_id]
+        # sent buffer
+        self.agents[agent_id].send(amount)
         # --- 3. 異質化接收發生在這裡！ ---
         for g_idx in grid_is:
             for ui, user in enumerate(self.user_grids[g_idx].users):
                 # 算出自己的漏水率
-                # User A 在中心，erasure_rate = 0.05
-                # User B 在邊緣，erasure_rate = 0.40
                 user_erasure_rate = self.calculate_erasure_rate(agent_id, user, current_time)
                 
                 # 【關鍵】大家都面對同樣的 37 滴水，但各自憑實力接水

@@ -20,4 +20,6 @@ else:
 
 TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
+TEST_ID = 'Starlink_Shell2_0_0'
+
 # print(sys.argv)

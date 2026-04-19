@@ -4,6 +4,7 @@ from gymnasium.spaces import Box, Dict
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load
 from Constellation import *
+from param import *
 
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
@@ -138,7 +139,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.constellation.meo_broadcast_to_leos(current_time)
 
         # 3. 計算 Reward (獎勵設計)
-        # rewards = {i:-self.current_step for i in range(self.N)}
         rewards = {}
         ft = self.constellation.get_finish_time_cost()
 
@@ -151,7 +151,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         for agent_name in self.agents:
             # name_i = agent_i.name
             i = self.constellation.get_id_by_name(agent_name)
-            rewards[agent_name] = 0 #-self.current_step
+            rewards[agent_name] = 0 
             # 神經網路輸出的比例 (0~1)
             raw_action = actions[agent_name] # {"LEO_i": action}
 
@@ -164,12 +164,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 # 如果總和小於或等於 1，代表衛星想「保留」一部分封包在自己的 Buffer 裡不傳，這是合法的！
                 action_probs = raw_action
 
-            # 將比例轉換為實際想傳的封包數 (乘以自身 Buffer 總量)
-            # desired_flows = action_probs * self.constellation.get_leo_buffer(i)
-
-            # if (self.is_ERNC_baseline):
-            #     desired_flows = np.array([0] * self.M + [1]) * self.constellation.get_leo_buffer(i)
-            
             # --- 套用物理拘束 (Contact Volume) ---
             # Intra-tier (給鄰居)
             acc_cost = 0.0
@@ -182,7 +176,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 
                 if self.constellation.get_ISL_capacity(i, agent_j, current_time) > 0:
                     teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
-                    # print("teg_j:", np.sum(teg_j))
                     if np.sum(teg_j) > 0:  
                         action_mask[j] = 1.0
                 
@@ -197,6 +190,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
+            print("ENV:", i, current_time)
             if len(self.constellation.get_visible_grids(i, current_time)) > 0:
                 action_mask[self.M] = 1.0
                 
@@ -204,14 +198,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # print("DL:", contact_capacity)
             acc_cost += actual_flow
             acc_max_cost += max_buf
-
-            # rewards[agent_name] -= actual_flow / max_buf (X)
-            # too large...
-            # rewards[agent_name] -= acc_cost / acc_max_cost / self.reward_factor
             self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
             self.episode_tx_cost += actual_flow
 
             # 在 step() 裡，下載前先記錄舊進度
+            # if (agent_name == TEST_ID):
+            #     print(action_probs[self.M], contact_capacity, action_mask[self.M])
             old_fulfill = self.constellation.get_user_fulfill_percent()
 
             # for g in range(self.constellation.get_visible_grids(i)):

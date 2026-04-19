@@ -14,10 +14,11 @@ TARGET_K = CONST_.target_k
 
 def check_roi_coverage(T_max=100, step_second=10):
     print("初始化星系與網格 (這會花幾秒鐘)...")
-    env = Constellation(param=CONST_, num_users=N_USER)
+    # env = Constellation(param=CONST_, num_users=N_USER)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER)
     
     ts = load.timescale()
-    start_dt = env.agents[0].skyfield_sat.epoch.utc_datetime()
+    start_dt = env.constellation.agents[0].skyfield_sat.epoch.utc_datetime()
     
     print(f"模擬開始時間: {start_dt}")
     print(f"尋找涵蓋 RoI (台灣) 的衛星...")
@@ -31,25 +32,21 @@ def check_roi_coverage(T_max=100, step_second=10):
                               current_dt.hour, current_dt.minute, current_dt.second)
         
         # 檢查每顆衛星是否看到任何 Ground Grid
-        visible_found = False
-        for i, sat in enumerate(env.agents):
-            grids = env.get_visible_grids(i, current_time)
+        for i, sat in enumerate(env.constellation.agents):
+            grids = env.constellation.get_visible_grids(i, current_time)
             # target_name = "Starlink_Shell2_61_0"
             # _id = env.get_id_by_name(target_name)
             if len(grids) > 0:
-                print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI！可視網格數: {len(grids)}\
-                CV: {env.get_teg_downlink_volume(i, 2, current_time)}")
+                print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI ! 可視網格數: {len(grids)}\
+                CV: {env.constellation.get_teg_downlink_volume(i, 2, current_time)} buf: {sat.get_buffer()}")
                 visible_found = True
-                
-        # 如果你想讓畫面乾淨一點，可以把下面這行註解掉
-        # if not visible_found:
-        #     print(f"[Step {step:03d} | {current_dt.strftime('%H:%M:%S')}] 無衛星涵蓋")
 
-def run_diagnostic(T_max=100):
+                
+def run_diagnostic(T_max=100, step_second=10):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=step_second)
     obs, info = env.reset()
     
     # 獲取初始參數
@@ -61,6 +58,11 @@ def run_diagnostic(T_max=100):
     # 假設 get_user_fulfill_percent 是根據完成度比例
     initial_fulfill = env.constellation.get_user_fulfill_percent()
     
+    ts = load.timescale()
+    start_dt = env.constellation.agents[0].skyfield_sat.epoch.utc_datetime()
+    
+    print(f"模擬開始時間: {start_dt}")
+
     print(f"[參數確認]")
     print(f"- 衛星數量: {n_agents}")
     print(f"- 網格數量: {total_grids}")
@@ -69,20 +71,20 @@ def run_diagnostic(T_max=100):
     print("-" * 30)
 
     # 2. 測試：如果所有衛星「完全躺平」(零動作)
-    # print("[測試 1: 零動作測試 (純觀察 MEO 補給與時間流逝)]")
-    # for s in range(5):
-    #     # 建立全 0 的動作 (不傳輸任何資料)
-    #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32) 
-    #                for agent in env.agents}
-    #     obs, rewards, terms, truncs, infos = env.step(actions)
+    print("[測試 1: 零動作測試 (純觀察 MEO 補給與時間流逝)]")
+    for s in range(5):
+        # 建立全 0 的動作 (不傳輸任何資料)
+        actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32) 
+                   for agent in env.agents}
+        obs, rewards, terms, truncs, infos = env.step(actions)
         
-    #     fulfill = env.constellation.get_user_fulfill_percent()
-    #     # 看看 MEO 有沒有把 LEO 的 Buffer 填滿
-    #     total_buffer = sum([env.constellation.get_leo_buffer(i) for i in range(n_agents)])
+        fulfill = env.constellation.get_user_fulfill_percent()
+        # 看看 MEO 有沒有把 LEO 的 Buffer 填滿
+        total_buffer = sum([env.constellation.get_leo_buffer(i) for i in range(n_agents)])
         
-    #     print(f"Step {s+1} | 全網總 Buffer: {total_buffer} packet | 完成度: {fulfill:.2%}")
+        print(f"Step {s+1} | 全網總 Buffer: {total_buffer} packet | 完成度: {fulfill:.2%}")
 
-    # print("-" * 30)
+    print("-" * 30)
 
     # 3. 測試：如果所有衛星「全力輸出」(動作設為 1)
     print("[測試 2: 最大輸出測試 (確認產力上限)]")
@@ -93,13 +95,24 @@ def run_diagnostic(T_max=100):
         actions = {agent: np.ones(env.action_spaces[agent].shape, dtype=np.float32)
                    for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
+
+        current_dt = start_dt + timedelta(seconds=s * step_second)
+        current_time = ts.utc(current_dt.year, current_dt.month, current_dt.day, 
+                              current_dt.hour, current_dt.minute, current_dt.second)
         
-        # print("TEG:")
-        # for agent in env.agents:
-        #     print(env.constellation.get_teg_downlink_volume(env.constellation.get_id_by_name(agent), 2, s))
+         # 檢查每顆衛星是否看到任何 Ground Grid
+        for i, sat in enumerate(env.constellation.agents):
+            grids = env.constellation.get_visible_grids(i, current_time)
+            # target_name = "Starlink_Shell2_61_0"
+            # _id = env.get_id_by_name(target_name)
+            if len(grids) > 0:
+                print("TEST:", i, current_time)
+                print(f"[Step {s:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI ! 可視網格數: {len(grids)}\
+                CV: {env.constellation.get_teg_downlink_volume(i, 2, current_time)} buf: {sat.get_buffer()}")
+                
         fulfill = env.constellation.get_user_fulfill_percent()
         recvd = env.constellation.get_user_received_percent()
-        violated = infos['Starlink_Shell2_0_0']["is_violation"]        
+        violated = infos[TEST_ID]["is_violation"]        
         # each 10 step
         if (s+1) % 10 == 0:
             print(f"Step {s+1} | 完成度: {fulfill:.2%} | 已收到 avg: {recvd}")
@@ -127,7 +140,6 @@ def basic_test():
     print("環境測試完美通過！可以開始訓練了！")
 
 def main():
-    check_roi_coverage(T_max=TMAX)
     run_diagnostic(T_max=TMAX)
 
 
