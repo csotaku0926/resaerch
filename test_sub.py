@@ -12,9 +12,9 @@ CONST_ = CONST_PARAM
 TMAX = CONST_.t_max
 TARGET_K = CONST_.target_k
 
-def check_roi_coverage(T_max=100):
+def check_roi_coverage(T_max=100, step_second=10):
     print("初始化星系與網格 (這會花幾秒鐘)...")
-    env = Constellation(const_param=CONST_, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
+    env = Constellation(param=CONST_, num_users=N_USER)
     
     ts = load.timescale()
     start_dt = env.agents[0].skyfield_sat.epoch.utc_datetime()
@@ -26,7 +26,7 @@ def check_roi_coverage(T_max=100):
     # 2 小時 = 7200 秒 = 720 個 step (每步 10 秒)
     
     for step in range(T_max):
-        current_dt = start_dt + timedelta(seconds=step * 10)
+        current_dt = start_dt + timedelta(seconds=step * step_second)
         current_time = ts.utc(current_dt.year, current_dt.month, current_dt.day, 
                               current_dt.hour, current_dt.minute, current_dt.second)
         
@@ -49,7 +49,7 @@ def run_diagnostic(T_max=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, T_max=T_max, num_users=N_USER, target_k=TARGET_K)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER)
     obs, info = env.reset()
     
     # 獲取初始參數
@@ -99,13 +99,15 @@ def run_diagnostic(T_max=100):
         #     print(env.constellation.get_teg_downlink_volume(env.constellation.get_id_by_name(agent), 2, s))
         fulfill = env.constellation.get_user_fulfill_percent()
         recvd = env.constellation.get_user_received_percent()
-        violated = infos['Starlink_Shell2_0_0']["is_violation"]
+        violated = infos['Starlink_Shell2_0_0']["is_violation"]        
+        # each 10 step
+        if (s+1) % 10 == 0:
+            print(f"Step {s+1} | 完成度: {fulfill:.2%} | 已收到 avg: {recvd}")
+
+        # terminate
         if fulfill >= (1 - env.e) or (s+1) == T_max:
             print(f">>> 最終結果 @ Step {s+1}: 完成度 {fulfill:.2%} | 是否結束: {not violated}")
             break
-        
-        if (s+1) % 10 == 0:
-            print(f"Step {s+1} | 完成度: {fulfill:.2%} | 已收到 avg: {recvd}")
 
     # print(infos)
     print("\n=== 診斷結論 ===")
@@ -125,8 +127,7 @@ def basic_test():
     print("環境測試完美通過！可以開始訓練了！")
 
 def main():
-    # Tmax = 80
-    # check_roi_coverage(T_max=Tmax)
+    check_roi_coverage(T_max=TMAX)
     run_diagnostic(T_max=TMAX)
 
 

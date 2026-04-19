@@ -29,3 +29,35 @@
 1. MEO : transmit to visible LEO
 2. LEO --> LEO relay (action) (predefined routing?)
 3. NC multipath, multicast
+
+## 04/15 update
+正確性: 觀察不用真實星系
+一個人: 退縮回 unicast (other: multiple unicast)
+simulation 告訴甚麼事情, 我想觀察甚麼，跟我的機制的關係，什麼樣的狀況下
+看不出來有甚麼意義, 想要表達的 insight
+
+理想環境
+- 重疊覆蓋區域高, 用戶多 : 阻止多顆衛星同時盲目發射, 在衛星同時覆蓋的情形發生
+- 低仰角超長 : 阻止衛星看到就急著發射 (?)
+- MEO 補給的效率要低於 LEO ?
+
+觀察
+- 不要多個衛星同時對同一群用戶發送
+    - 分配每個衛星的 quota，而不是每個都傳 max packet for 邊緣用戶
+- 想讓接觸比較多用戶的衛星去做，不用分開傳送 (multi-unicast) --> 充分利用 NC 的 multicast advantage
+    - 甚麼是 multi-unicast ? multicast ? 
+    - 把所有人的需求分批在最適合的仰角 (對 "多人平均" 而言是最好的角度)，而不是只有看到一個人就硬傳
+    - 根據 TEG ，發現接觸時間短，馬上傳完; 接觸長，等未來
+- 在狀態不好的狀況發射 quota ，成效低而且太快把庫存射完了 (考慮 LEO 只作為純粹的搬運工，完全不產生新的資料)
+- scalability : Tx cost 增長趨勢低於他人
+
+機制
+- Critic 統籌全局，它會告訴衛星 A 傳，告訴衛星 B 和 C 停止，合作性退讓 ? 消除重疊覆蓋區的浪費
+
+metrics
+- Tx cost 成長率 (平均每個用戶跑進度，要多少成本) --> 用戶收到的數量 / 衛星傳輸的封包
+- 超時率 ?
+
+=====================================
+ Praying for you 🕯️ O Great Mita 💝 
+=====================================

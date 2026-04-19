@@ -9,7 +9,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
     def __init__(self, const_param: Const_Param, num_neighbors=1, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
-                 is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=40):
+                 is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10):
         super().__init__()
 
         # 1. 定義 param

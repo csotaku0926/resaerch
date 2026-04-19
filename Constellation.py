@@ -29,7 +29,7 @@ class Constellation:
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
-                 step_seconds=40, t_max=90, target_k=20):
+                 step_seconds=10, t_max=90, target_k=20):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
         self.inc = param.inc       # 傾角 (度)
@@ -92,17 +92,13 @@ class Constellation:
         np.random.seed(1234)
 
         # ------------ build constellation ------------------
-        self.build_constellation()
-        sat0_lat, sat0_lon = self.locate_sat_init(agent_id=0)
         self.initialize_roi(
-            lat_min=sat0_lat - self.grid_scale, 
-            lat_max=sat0_lat + self.grid_scale, 
-            lon_min=sat0_lon - self.grid_scale, 
-            lon_max=sat0_lon + self.grid_scale, 
             grid_size=self.grid_scale,
             users_per_grid=self.users_per_grid, 
             target_k=self.target_k
         )
+        raan_offset = self.get_raan_offset()
+        self.build_constellation(raan_offset=raan_offset)
 
     def reset(self):
         """reset whole constellation (buffer state, inital position)"""
@@ -112,7 +108,7 @@ class Constellation:
         for i in range(len(self.user_grids)):
             self.user_grids[i].reset()
 
-    def build_constellation(self):
+    def build_constellation(self, raan_offset=0.0, rewind_angle_deg=45.0):
         # # 載入時間系統
         ts = load.timescale()
         # # 設定一個基準紀元時間 (Epoch)，所有衛星從這點開始跑
@@ -120,11 +116,14 @@ class Constellation:
         # sgp4_init 需要的是以 1949 年 12 月 31 日為基準的天數 (Skyfield ts.tt可以直接給出，這裡簡單使用 jd - 2433281.5)
         epoch_days = self.t_init.tt - 2433281.5 
 
+        # 【關鍵修正】：算出倒帶的角度
+        rewind_rad = math.radians(rewind_angle_deg)
+
         # --- 2. 生成 Walker-Delta 並直接建立 Skyfield 物件 ---
         for p in range(self.p):
             # 算出該軌道面的升交點赤經 (RAAN)，並轉成弧度
             raan_deg = p * (360.0 / self.p)
-            raan_rad = math.radians(raan_deg)
+            raan_rad = math.radians(raan_deg) + raan_offset - rewind_rad
             
             for s in range(self.s):
                 # 算出該衛星的平近點角 (Mean Anomaly)，並轉成弧度
@@ -193,6 +192,40 @@ class Constellation:
         sat_lon = subpoint.longitude.degrees
         return sat_lat, sat_lon
 
+    def get_raan_offset(self, target_lat=10.0, target_lon=25.0) -> float:
+        """
+        將 Walker-Delta 星系的 0 號衛星，在 t_init 時精準對齊到 target_lat 與 target_lon。
+        (適用於 0~20N, 0~50E 區域，中心點為 10N, 25E)
+        """
+        ts = load.timescale()
+        epoch_days = self.t_init.tt - 2433281.5 
+        
+        # --- 步驟 A: 逆向推算需要的 Mean Anomaly (對齊緯度) ---
+        # 簡化公式： sin(Lat) = sin(Inc) * sin(Argument of Latitude)
+        # 由於圓軌道 Arg of Perigee = 0，Argument of Latitude 就等於 Mean Anomaly
+        inc_rad = math.radians(self.inc)
+        target_lat_rad = math.radians(target_lat)
+        
+        # 確保目標緯度沒有超過軌道傾角極限
+        if abs(target_lat) > self.inc:
+            raise ValueError("目標緯度大於軌道傾角，衛星永遠飛不到那裡！")
+            
+        base_ma_rad = math.asin(math.sin(target_lat_rad) / math.sin(inc_rad))
+        
+        # --- 步驟 B: 逆向推算需要的 RAAN (對齊經度) ---
+        # 地球自轉也會影響經度，最暴力的做法是先建一顆測試衛星，看誤差多少再修正
+        satrec_test = Satrec()
+        satrec_test.sgp4init(WGS72, 'i', 999, epoch_days, 0.0, 0.0, 0.0, 0.0, 0.0,
+                             inc_rad, base_ma_rad, self.NO_KOZAI, 0.0)
+        test_sat = EarthSatellite.from_satrec(satrec_test, ts)
+        test_lon = test_sat.at(self.t_init).subpoint().longitude.degrees
+        
+        # 計算經度偏差值
+        lon_offset_deg = target_lon - test_lon
+        raan_offset_rad = math.radians(lon_offset_deg)
+
+        return raan_offset_rad
+
     def initialize_roi(self, lat_min=0.0, lat_max=20.0, lon_min=0.0, lon_max=50.0, grid_size=20.0, users_per_grid=10, target_k=100):
         """
         根據經緯度範圍，自動生成 GroundGrid 陣列與散佈在其中的 Users
@@ -205,6 +238,8 @@ class Constellation:
         # 產生經緯度的 grid
         lats = np.arange(lat_min, lat_max, grid_size)
         lons = np.arange(lon_min, lon_max, grid_size)
+
+        print(f"generate {len(lats) * len(lons)} grids")
 
         for lat in lats:
             for lon in lons:

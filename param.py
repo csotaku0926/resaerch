@@ -4,9 +4,9 @@ from Constellation import *
 STARLINK_S2 = Const_Param(alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=90, target_k=20) # step = 10
 ONEWEB_GEN1 = Const_Param(alt=1200, inc=88, p=18, s=20, f=17, t_max=40, target_k=10) # K = 10, T = 40
 TELESAT_P1 = Const_Param(alt=1325, inc=50.88, p=20, s=11, f=17, t_max=50, target_k=10) # 
-TEST_ = Const_Param(alt=540.0, inc=53.2, p=5, s=12, f=17, t_max=90, target_k=15) # step_seconds = 40
+TEST_ = Const_Param(alt=540.0, inc=53.2, p=1, s=3, f=17, t_max=90, target_k=15) # step_seconds = 40
 
-MY_CONST_NAME = "oneweb"
+MY_CONST_NAME = "test"
 IS_MYOTIC = True
 
 if MY_CONST_NAME == "oneweb":
