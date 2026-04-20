@@ -14,7 +14,7 @@ class RelaySatellite:
         self.skyfield_sat = skyfield_sat  # 底層的物理衛星物件
         self.name = skyfield_sat.name
         self.buffer = 0.0          # 肚子裡有多少個 NC 封包 (Degrees of Freedom)
-        self.max_buffer = 1000.0   # 緩存上限
+        self.max_buffer = 30.0   # 緩存上限
         
     def recv(self, amount:int):
         self.buffer = min(self.buffer + amount, self.max_buffer)

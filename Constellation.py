@@ -239,6 +239,8 @@ class Constellation:
         lats = np.arange(lat_min, lat_max, grid_size)
         lons = np.arange(lon_min, lon_max, grid_size)
 
+        # reset if exist
+        self.user_grids.clear()
         print(f"generate {len(lats) * len(lons)} grids")
 
         for lat in lats:

@@ -197,7 +197,7 @@ oneweb: k = 60, Tmax = 50
 MY_CONST_PARAM = CONST_PARAM
 
 T_MAX = MY_CONST_PARAM.t_max
-N_TRAIN_ITER = 200
+N_TRAIN_ITER = 100
 LAMBDA_W = 1.0
 # IS_MYOTIC = True if len(sys.argv) == 2 else False
 TARGET_K = MY_CONST_PARAM.target_k

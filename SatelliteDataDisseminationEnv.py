@@ -180,8 +180,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                         action_mask[j] = 1.0
                 
                 contact_capacity = self.constellation.get_ISL_capacity(i, agent_j, current_time)
-                actual_flow = action_probs[j] * contact_capacity * action_mask[j] #min(desired_flows[j], contact_capacity) * action_mask[j]
-                # print("agent:", agent_j, " ISL:", contact_capacity)
+                buf_i = self.constellation.get_leo_buffer(i)
+                actual_flow = min(buf_i, action_probs[j] * contact_capacity * action_mask[j])
                 self.constellation.transfer_buffer(sat_id=i, neighbor=agent_j, amount=actual_flow)
                 # count in "actual_flow"
                 acc_cost += actual_flow
@@ -190,12 +190,13 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
-            print("ENV:", i, current_time)
+            # print("ENV:", i, current_time)
             if len(self.constellation.get_visible_grids(i, current_time)) > 0:
                 action_mask[self.M] = 1.0
                 
-            actual_flow = action_probs[self.M] * contact_capacity * action_mask[self.M] #min(desired_flows[self.M], contact_capacity)
-            # print("DL:", contact_capacity)
+            buf_i = self.constellation.get_leo_buffer(i)
+            actual_flow = min(buf_i, action_probs[self.M] * contact_capacity * action_mask[self.M]) 
+
             acc_cost += actual_flow
             acc_max_cost += max_buf
             self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
