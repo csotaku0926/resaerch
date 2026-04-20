@@ -2,7 +2,7 @@ from pettingzoo.test import parallel_api_test
 from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
 
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta, datetime
 from skyfield.api import load
 from Constellation import Constellation
 from param import *
@@ -46,7 +46,7 @@ def run_diagnostic(T_max=100, step_second=10):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=step_second)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=step_second, test_mode=True)
     obs, info = env.reset()
     
     # 獲取初始參數
@@ -111,6 +111,7 @@ def run_diagnostic(T_max=100, step_second=10):
         #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32)
         #             for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
+        print("[OBS]: ", obs[TEST_ID]["local_obs"])
         
          # 檢查每顆衛星是否看到任何 Ground Grid
         for i, sat in enumerate(env.constellation.agents):
@@ -152,13 +153,31 @@ def basic_test():
     parallel_api_test(env, num_cycles=1000)
     print("環境測試完美通過！可以開始訓練了！")
 
+def reset_test():
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=10, test_mode=True, num_grids=10)
+    
+    ts = load.timescale()
+    start_dt = datetime(2026, 4, 1, 0, 0, 0) #env.constellation.agents[0].skyfield_sat.epoch.utc_datetime()
+    
+    current_dt = start_dt
+    current_time = ts.utc(current_dt.year, current_dt.month, current_dt.day, 
+                            current_dt.hour, current_dt.minute, current_dt.second)
+    
+    print("[INFO] satellite const pos")
+    print([s.skyfield_sat.at(current_time).subpoint().latitude.degrees for s in env.constellation.agents])
+    print("[INFO] user lat")
+    print([u.lat for u in env.constellation.user_grids[0].users])
+
+    obs, info = env.reset()
+    print("[INFO] satellite const pos")
+    print([s.skyfield_sat.at(current_time).subpoint().latitude.degrees for s in env.constellation.agents])
+    print("[INFO] user lat")
+    print([u.lat for u in env.constellation.user_grids[0].users])
+
 def main():
     # run_diagnostic(T_max=TMAX)
-
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=10)
-    print([u.pos for u in  env.constellation.user_grids[0].users])
-    obs, info = env.reset()
-
+    reset_test()
+   
 
 if __name__ == '__main__':
     main()

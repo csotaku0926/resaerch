@@ -50,9 +50,9 @@ x_column = 'User_Num'
 
 # 定義四個演算法的線條顏色與標記符號，讓圖表更具學術專業感
 styles = {
-    'Greedy Baseline': {'color': 'gray', 'marker': 'x', 'linestyle': '--'},
-    'Static ERNC': {'color': 'green', 'marker': 's', 'linestyle': '-.'},
-    'Opportunistic ERNC': {'color': 'orange', 'marker': '^', 'linestyle': ':'},
+    'Greedy': {'color': 'gray', 'marker': 'x', 'linestyle': '--'},
+    'Static': {'color': 'green', 'marker': 's', 'linestyle': '-.'},
+    'ERNC': {'color': 'orange', 'marker': '^', 'linestyle': ':'},
     'Myotic MARL': {'color': 'red', 'marker': 'o', 'linestyle': '-'},
     'Proposed MARL (Ours)': {'color': 'blue', 'marker': 'o', 'linestyle': '-'}
 }

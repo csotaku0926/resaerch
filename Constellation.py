@@ -3,7 +3,7 @@ from skyfield.api import load, EarthSatellite
 from Satellite import *
 from GroundGrid import *
 from sgp4.api import Satrec, WGS72
-from datetime import datetime, timedelta
+from datetime import timezone, timedelta
 
 # 物理常數
 MU = 398600.4418         # 地球標準重力參數 (km^3/s^2)
@@ -29,7 +29,7 @@ class Constellation:
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
-                 step_seconds=10, t_max=90, target_k=20):
+                 step_seconds=10, t_max=90, target_k=20, test_mode=False):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
         self.inc = param.inc       # 傾角 (度)
@@ -92,13 +92,18 @@ class Constellation:
         np.random.seed(1234)
 
         # ------------ build constellation ------------------
-        self.initialize_roi(
-            grid_size=self.grid_scale,
-            users_per_grid=self.users_per_grid, 
-            target_k=self.target_k
-        )
-        raan_offset = self.get_raan_offset()
-        self.build_constellation(raan_offset=raan_offset)
+        self.test_mode = test_mode
+        if not self.test_mode:
+            self.initialize_roi(
+                grid_size=self.grid_scale,
+                users_per_grid=self.users_per_grid, 
+                target_k=self.target_k
+            )
+            raan_offset = self.get_raan_offset()
+            self.build_constellation(raan_offset=raan_offset)
+        else:
+            self.build_constellation()
+            self.initialize_users_along_tracks(self.target_k)
 
     def reset(self):
         """reset whole constellation (buffer state, inital position)"""
@@ -108,7 +113,17 @@ class Constellation:
         for i in range(len(self.user_grids)):
             self.user_grids[i].reset()
 
-    def build_constellation(self, raan_offset=0.0, rewind_angle_deg=45.0):
+        if not self.test_mode:
+            self.initialize_roi(
+                grid_size=self.grid_scale,
+                users_per_grid=self.users_per_grid, 
+                target_k=self.target_k
+            )
+
+        else:
+            self.initialize_users_along_tracks(self.target_k)
+
+    def build_constellation(self, raan_offset=0.0, rewind_angle_deg=45.0, do_log=False):
         # # 載入時間系統
         ts = load.timescale()
         # # 設定一個基準紀元時間 (Epoch)，所有衛星從這點開始跑
@@ -123,6 +138,8 @@ class Constellation:
         for p in range(self.p):
             # 算出該軌道面的升交點赤經 (RAAN)，並轉成弧度
             raan_deg = p * (360.0 / self.p)
+            if (self.test_mode): raan_deg = p * 5.0
+
             raan_rad = math.radians(raan_deg) + raan_offset
             
             for s in range(self.s):
@@ -179,13 +196,13 @@ class Constellation:
 
         # self.agents.append(meo_i)
 
-        print(f"成功將 {len(self.agents)} 顆完美 Walker 衛星實體化為 Skyfield 物件！")
+        if (do_log): print(f"成功將 {len(self.agents)} 顆完美 Walker 衛星實體化為 Skyfield 物件！")
 
         # --- 3. 測試：取得第一顆衛星在 10 分鐘後的 3D 座標 ---
         t_test = ts.utc(2026, 4, 1, 0, 10, 0)
         pos = self.agents[0].get_pos(t_test)
-        print(f"衛星 {self.agents[0].name} 在 {t_test.utc_datetime()} 的 3D 座標 (X, Y, Z) km: \n{pos}")
-
+        if (do_log): print(f"衛星 {self.agents[0].name} 在 {t_test.utc_datetime()} 的 3D 座標 (X, Y, Z) km: \n{pos}")
+ 
     def locate_sat_init(self, agent_id):
         subpoint = self.agents[agent_id].skyfield_sat.at(self.t_init).subpoint()
         sat_lat = subpoint.latitude.degrees
@@ -226,14 +243,14 @@ class Constellation:
 
         return raan_offset_rad
 
-    def initialize_roi(self, lat_min=0.0, lat_max=20.0, lon_min=0.0, lon_max=50.0, grid_size=20.0, users_per_grid=10, target_k=100):
+    def initialize_roi(self, lat_min=0.0, lat_max=90.0, lon_min=0.0, lon_max=90.0, grid_size=20.0, users_per_grid=10, target_k=100, do_log=False):
         """
         根據經緯度範圍，自動生成 GroundGrid 陣列與散佈在其中的 Users
         """
         grid_id_counter = 0
         user_id_counter = 0
 
-        print(f"Initialize grids at lat {lat_min}~{lat_max}, lon {lon_min}~{lon_max}")
+        if (do_log): print(f"Initialize grids at lat {lat_min}~{lat_max}, lon {lon_min}~{lon_max}")
 
         # 產生經緯度的 grid
         lats = np.arange(lat_min, lat_max, grid_size)
@@ -241,7 +258,7 @@ class Constellation:
 
         # reset if exist
         self.user_grids.clear()
-        print(f"generate {len(lats) * len(lons)} grids")
+        if (do_log): print(f"generate {len(lats) * len(lons)} grids")
 
         for lat in lats:
             for lon in lons:
@@ -265,6 +282,61 @@ class Constellation:
                 self.user_grids.append(grid)
                 grid_id_counter += 1
 
+    def initialize_users_along_tracks(self, target_k=20, do_log=False):
+        ts = load.timescale()
+        
+        # --- 第 1 階段：純掃描 ---
+        # 只記錄衛星在這段時間內會經過的「不重複網格座標」
+        target_grid_coords = []
+        grid_size = self.grid_scale
+
+        if do_log: print(f"正在掃描 {len(self.agents)} 顆衛星的模擬軌跡涵蓋範圍...")
+
+        for agent in self.agents:
+            for step in range(self.t_max):
+                future_dt = self.t_init.utc_datetime() + timedelta(seconds=step * self.step_seconds)
+                future_t = ts.from_datetime(future_dt.replace(tzinfo=timezone.utc))
+                
+                subpoint = agent.skyfield_sat.at(future_t).subpoint()
+                lat = subpoint.latitude.degrees
+                lon = subpoint.longitude.degrees
+                
+                grid_lat = math.floor(lat / grid_size) * grid_size
+                grid_lon = math.floor(lon / grid_size) * grid_size
+                
+                # 把經過的座標丟進 set 裡 (自動去重)
+                target_grid_coords.append([grid_lat, grid_lon])
+
+        # --- 第 2 階段：真正初始化用戶 ---
+        # 確定了涵蓋範圍後，才開始建立物件 (絕對不會重複生成！)
+        self.user_grids = []
+        grid_id_counter = 0
+        user_id_counter = 0
+
+        # random pick K grids
+        target_grid_coords = list(target_grid_coords)
+        np.random.shuffle(target_grid_coords)
+        target_grid_coords = target_grid_coords[:self.n_grids]
+
+        if do_log: print(f"掃描完畢，共有 {len(target_grid_coords)} 個網格落入涵蓋範圍。開始生成用戶...")
+
+        for (grid_lat, grid_lon) in target_grid_coords:
+            grid = GroundGrid(grid_lat + grid_size // 2, grid_lon + grid_size // 2, grid_id_counter, 
+                             grid_size=grid_size, target_k=target_k)
+            
+            for _ in range(self.users_per_grid):
+                u_lat = grid_lat + grid_size // 2 + np.random.uniform(-grid_size // 2, grid_size // 2)
+                u_lon = grid_lon + grid_size // 2 + np.random.uniform(-grid_size // 2, grid_size // 2)
+                user = User(user_id_counter, u_lat, u_lon, target_k=target_k)
+                grid.users.append(user)
+                grid.user_finish_time.append(-1)
+                user_id_counter += 1
+            
+            self.user_grids.append(grid)
+            grid_id_counter += 1
+
+        if do_log: print(f"初始化完成！共建立 {grid_id_counter} 個網格，{user_id_counter} 個用戶。")
+    
     def get_id_by_name(self, name: str):
         return self.name_to_idx[name]
 
@@ -329,7 +401,6 @@ class Constellation:
         # --- 3. 動態容量計算 (Shannon Capacity) ---
         bandwidth_hz = 500e6 # 物理頻寬 100 MHz
         
-        # print(dist, snr_linear)
         # 理論最大傳輸速率 (bps)
         dynamic_rate_bps = bandwidth_hz * np.log2(1 + snr_linear)
         actual_rate_bps = dynamic_rate_bps 
@@ -377,7 +448,6 @@ class Constellation:
 
             # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
             self.transfer_buffer(neighbor=i, amount=meo_total_packets)
-            # print(self.get_leo_buffer(i))
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
         sat = self.agents[agent_id].skyfield_sat
@@ -466,15 +536,12 @@ class Constellation:
         second = dt.second
         
         # 陷阱設計：每分鐘的 第 20 秒 到 50 秒，會有一場嚴重的通訊遮蔽
-        # print(second)
         in_weather_event = (20 <= second <= 50)
         
         # 為了強迫 AI 使用 ISL 協作，我們讓這場風暴「只襲擊偶數號衛星」，奇數號天氣晴朗
         if in_weather_event and (agent_id % 2 == 0):
-            # print("boom")
             return 0.99  # 突發 99% 掉包率 (通道幾乎全毀)
         
-        # print(elevation_rad, final_erasure)
         return float(final_erasure)
 
     def download_to_grid(self, agent_id:int, amount, current_time):
@@ -495,7 +562,6 @@ class Constellation:
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
                 self.user_grids[g_idx].users[ui].recv(received)
-                # print(self.user_grids[g_idx].users[ui].get_buffer())
 
     def get_user_fulfill_percent(self) -> float:
         # return the percentage
@@ -581,7 +647,6 @@ class Constellation:
 
 def main():
     C = Constellation()
-    print(type(C.constellation[0]))
     
 if __name__ == '__main__':
     main()

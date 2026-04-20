@@ -24,12 +24,9 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-# MODE         = "ERNC"          # "MAPPO" | "GREEDY" | "ERNC" | "STATIC_R"
-USER_NUMBERS = [10, 50, 90, 130, 170, 210]
+USER_NUMBERS = [1, 50, 100, 200, 400]
 NUM_EPISODES = 3
-# TARGET_K = 10
-# MY_CONST_NAME = "oneweb" # oneweb | starlink | telesat
-T_MAX = 100
+T_MAX = CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
@@ -37,14 +34,6 @@ print(f"- target K: {TARGET_K}")
 print("-" * 30)
 # ─────────────────────────────────────────────────
 
-# assert len(sys.argv) == 2, "usage: python3 test.py <const_mode>"
-# MY_CONST_NAME = sys.argv[1]
-# if MY_CONST_NAME == "oneweb":
-#     CONST_PARAM = ONEWEB_GEN1
-# elif MY_CONST_NAME == "starlink":
-#     CONST_PARAM = STARLINK_S2
-# else:
-#     CONST_PARAM = TELESAT_P1
 
 def current_skyfield_time(actual_env):
     dt = actual_env.start_dt + timedelta(
@@ -209,7 +198,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         print(f"\n[{mode}] ══ n_users={n_users} ══")
 
         raw_env = SatelliteDataDisseminationEnv(
-            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC")
+            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE
         )
         env = ParallelPettingZooEnv(raw_env)
 
@@ -341,7 +330,8 @@ def main():
             def env_creator(cfg):
                 return ParallelPettingZooEnv(
                     SatelliteDataDisseminationEnv(
-                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10)))
+                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10), test_mode=IS_TEST_MODE
+                ))
             register_env("satellite_nc_env", env_creator)
             algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_checkpoints"))
             print("MAPPO 載入完成")
@@ -351,7 +341,7 @@ def main():
             def env_creator(cfg):
                 return ParallelPettingZooEnv(
                     SatelliteDataDisseminationEnv(
-                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10), is_myotic=True
+                        const_param=CONST_PARAM, T_max=T_MAX, num_users=cfg.get("num_users", 10), is_myotic=True, test_mode=IS_TEST_MODE
                 ))
             register_env("satellite_nc_env", env_creator)
             algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
