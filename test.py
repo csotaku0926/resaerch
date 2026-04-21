@@ -25,7 +25,7 @@ from param import *
 
 # ── 執行設定 ──────────────────────────────────────
 USER_NUMBERS = [1, 50, 100, 200, 400]
-NUM_EPISODES = 3
+NUM_EPISODES = 5
 T_MAX = CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
@@ -198,7 +198,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         print(f"\n[{mode}] ══ n_users={n_users} ══")
 
         raw_env = SatelliteDataDisseminationEnv(
-            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE
+            const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
+            is_unicast=(not (mode == "MAPPO" or mode == "MYOTIC"))
         )
         env = ParallelPettingZooEnv(raw_env)
 

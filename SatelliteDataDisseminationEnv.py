@@ -10,7 +10,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
     def __init__(self, const_param: Const_Param, num_neighbors=1, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
-                 is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False):
+                 is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False):
         super().__init__()
 
         # 1. 定義 param
@@ -23,6 +23,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         self.target_k = target_k
         self.step_seconds = step_seconds
+        self.is_unicast = is_unicast
         
         if (is_myotic): self.Tw = 1
 
@@ -207,7 +208,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             acc_cost += actual_flow
             acc_max_cost += max_buf
             self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
-            self.episode_tx_cost += actual_flow
+            
 
             # 在 step() 裡，下載前先記錄舊進度
             # if (agent_name == TEST_ID):
@@ -215,14 +216,17 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             old_fulfill = self.constellation.get_user_fulfill_percent()
 
             # for g in range(self.constellation.get_visible_grids(i)):
-            self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
+            sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
+            # if (agent_name == TEST_ID): print(sent_user_count)
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * sent_user_count
+            else: self.episode_tx_cost += actual_flow
 
             # 計算進度增量 → 這才是真正的正向信號
             new_fulfill = self.constellation.get_user_fulfill_percent()
             delta_fulfill = new_fulfill - old_fulfill
 
             rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
-            rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
+            # rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
 
             # time cost
             rewards[agent_name] -= 1 / self.T_max #self.reward_factor_time
@@ -234,10 +238,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         terminations = {agent_name: is_done for agent_name in self.agents}
         truncations = {agent_name: is_truncated for agent_name in self.agents} # 是否超時
         is_violation = 1.0 if (is_truncated and not all_done) else 0.0
-
-        # if all_done:
-        #     for agent_name in self.agents:
-        #         rewards[agent_name] += 50.0    
 
         if is_done:
             for agent_name in self.agents:
@@ -265,13 +265,17 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "cost" : cost,  # ratio of receiver that not decode yet
                 "tx_cost": self.episode_tx_cost,
                 "time": ft,
-                "lambda": self.current_lambda
+                "lambda": self.current_lambda,
+                "sent_user_count": sent_user_count
             } for agent_name in self.agents
         }
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
         # if all_done or is_truncated:
         #     self.agents = []
+
+        # print("[LOG TEST] observations:", self.observation_spaces[TEST_ID])
+        # print("[LOG TEST] action:", actions[TEST_ID])
 
         return observations, rewards, terminations, truncations, infos
 

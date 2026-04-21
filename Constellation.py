@@ -43,6 +43,7 @@ class Constellation:
 
         self.n_grids = n_grids
         self.grid_scale = 10.0
+        self.min_angle_limit = 30.0
 
         self.agents = []
         self.user_grids = []
@@ -63,7 +64,7 @@ class Constellation:
         self.step_seconds = step_seconds
         self.target_k = param.target_k
         self.users_per_grid = num_users
-        self.max_covered_grid = 4 # assume at most cover 4 grids per time
+        self.max_covered_grid = 10 # assume at most cover 4 grids per time
         self.t_max = param.t_max
 
         # 這裡使用簡化的通訊參數
@@ -545,23 +546,37 @@ class Constellation:
         return float(final_erasure)
 
     def download_to_grid(self, agent_id:int, amount, current_time):
+        """
+        send data to visible users
+        return visible user amount
+        """
         grid_is = self.get_visible_grids(agent_id, current_time)
-
-        # sat = self.agents[agent_id]
+        usr_count = 0
+        sat = self.agents[agent_id].skyfield_sat
+        
         # sent buffer
         self.agents[agent_id].send(amount)
         # --- 3. 異質化接收發生在這裡！ ---
         for g_idx in grid_is:
+            # if (agent_id == 2): print(self.user_grids[g_idx].users)
             for ui, user in enumerate(self.user_grids[g_idx].users):
+   
+                difference = sat - user.pos # wgs84.latlon...
+                alt, _, _ = difference.at(current_time).altaz()
+                
+                # 如果仰角 > 15 度，代表波束涵蓋到了這個 user
+                if alt.degrees < self.min_angle_limit: continue
+
                 # 算出自己的漏水率
                 user_erasure_rate = self.calculate_erasure_rate(agent_id, user, current_time)
                 
                 # 【關鍵】大家都面對同樣的 37 滴水，但各自憑實力接水
-                # User A: np.random.binomial(37, 0.95) -> 可能收到 35 滴
-                # User B: np.random.binomial(37, 0.60) -> 可能只收到 22 滴
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
                 self.user_grids[g_idx].users[ui].recv(received)
+                usr_count += 1
+        
+        return usr_count
 
     def get_user_fulfill_percent(self) -> float:
         # return the percentage
@@ -572,7 +587,8 @@ class Constellation:
             ful_cnt += grid.get_user_fulfill()
             user_cnt += grid.get_user_count()
         return ful_cnt / user_cnt
-   
+
+
     def get_user_received_percent(self) -> float:
         # return the percentage
         ful_cnt = 0

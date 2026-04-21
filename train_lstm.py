@@ -37,6 +37,7 @@ class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
         
         buf_local_dim = np.prod(local_obs_space["buffers"].shape)
         buf_global_dim = np.prod(global_state_space["buffers"].shape)
+        mask_local_dim = np.prod(local_obs_space["action_mask"].shape)
 
         # ==========================================
         # 【核心 1】: Local Actor (LSTM + MLP 雙流架構)
@@ -53,7 +54,7 @@ class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
         
         # 融合靜態 Buffer 與動態 TEG 的決策層
         self.actor_mlp = nn.Sequential(
-            nn.Linear(buf_local_dim + self.lstm_hidden_dim, 128),
+            nn.Linear(buf_local_dim + self.lstm_hidden_dim + mask_local_dim, 128),
             nn.ReLU(),
             nn.Linear(128, num_outputs)
         )
@@ -78,9 +79,9 @@ class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
     def forward(self, input_dict, state, seq_lens):
         """Actor 決策前向傳播"""
         # 1. 取得 Local 觀測值 (RLlib 會自動幫你加上 Batch 維度)
-        local_buf = input_dict["obs"]["local_obs"]["buffers"] # 形狀: [Batch, 5]
-        local_cv = input_dict["obs"]["local_obs"]["contact_volumes"] # 形狀: [Batch, 5, Tw]
-        
+        local_buf = input_dict["obs"]["local_obs"]["buffers"] # 形狀: [Batch, M]
+        local_cv = input_dict["obs"]["local_obs"]["contact_volumes"] # 形狀: [Batch, M, Tw]
+        local_action_mask = input_dict["obs"]["local_obs"]["action_mask"] # [B, M]
         self._last_global_state = input_dict["obs"]["global_state"]
 
         # 2. 【最關鍵的物理轉置】：把時間軸放到 LSTM 的 Sequence 欄位
@@ -96,7 +97,7 @@ class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
 
         # 4. 特徵融合與決策
         # 把現在的 Buffer 和未來的 TEG 趨勢接在一起
-        combined_features = torch.cat([local_buf, cv_features], dim=1)
+        combined_features = torch.cat([local_buf, cv_features, local_action_mask], dim=1)
         action_logits = self.actor_mlp(combined_features)
         
         return action_logits, state
@@ -123,8 +124,16 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
         # 動態計算輸入維度 (攤平後的長度)
         local_obs_space = obs_space.original_space["local_obs"]
         global_state_space = obs_space.original_space["global_state"]
+
+        self.Tw = local_obs_space["contact_volumes"].shape[1]
+        self.num_local_links = local_obs_space["contact_volumes"].shape[0] # 通常是 M+1 (鄰居+地面)
+        self.num_global_links = global_state_space["contact_volumes"].shape[0] # N (全網衛星數)
         
-        local_dim = np.prod(local_obs_space["buffers"].shape) + np.prod(local_obs_space["contact_volumes"].shape)
+        buf_local_dim = np.prod(local_obs_space["buffers"].shape)
+        buf_global_dim = np.prod(global_state_space["buffers"].shape)
+        mask_local_dim = np.prod(local_obs_space["action_mask"].shape)
+        
+        local_dim = buf_local_dim + np.prod(local_obs_space["contact_volumes"].shape) + mask_local_dim
         global_dim = np.prod(global_state_space["buffers"].shape) + np.prod(global_state_space["contact_volumes"].shape)
 
         # 【核心 1】: Local Actor 網路 (只吃 local_dim)
@@ -152,10 +161,11 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
         # 1. 提取 Local Obs 並攤平成 1D 向量
         local_buf = input_dict["obs"]["local_obs"]["buffers"]
         local_cv = input_dict["obs"]["local_obs"]["contact_volumes"]
+        local_action_mask = input_dict["obs"]["local_obs"]["action_mask"]
         
         local_buf_flat = local_buf.reshape(local_buf.shape[0], -1)
         local_cv_flat = local_cv.reshape(local_cv.shape[0], -1)
-        local_features = torch.cat([local_buf_flat, local_cv_flat], dim=1)
+        local_features = torch.cat([local_buf_flat, local_cv_flat, local_action_mask], dim=1)
 
         # 2. 偷偷把 Global State 存起來，供等一下 Critic 訓練使用
         self._last_global_state = input_dict["obs"]["global_state"]
@@ -196,7 +206,7 @@ oneweb: k = 60, Tmax = 50
 
 MY_CONST_PARAM = CONST_PARAM
 T_MAX = MY_CONST_PARAM.t_max
-N_TRAIN_ITER = 50
+N_TRAIN_ITER = 30
 LAMBDA_W = 1.0
 TARGET_K = MY_CONST_PARAM.target_k
 
@@ -278,7 +288,7 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 
 
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE)
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -293,7 +303,7 @@ def main():
         ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     # 取得空間大小
-    dummy_env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC)
+    dummy_env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE)
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)

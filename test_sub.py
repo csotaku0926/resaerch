@@ -112,6 +112,7 @@ def run_diagnostic(T_max=100, step_second=10):
         #             for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
         print("[OBS]: ", obs[TEST_ID]["local_obs"])
+        # print("[INFO]: ", infos[TEST_ID]["sent_user_count"]) <-- problematic
         
          # 檢查每顆衛星是否看到任何 Ground Grid
         for i, sat in enumerate(env.constellation.agents):
@@ -175,8 +176,8 @@ def reset_test():
     print([u.lat for u in env.constellation.user_grids[0].users])
 
 def main():
-    # run_diagnostic(T_max=TMAX)
-    reset_test()
+    run_diagnostic(T_max=TMAX)
+    # reset_test()
    
 
 if __name__ == '__main__':

@@ -64,7 +64,7 @@ for m in METRICS:
             # (如果是別的欄位名稱，請把 'Reward' 換掉)
             baseline_value = df_baseline[m].iloc[0] 
 
-            if m == "Comp_Time": baseline_value = TMP_TIME[i]
+            # if m == "Comp_Time": baseline_value = TMP_TIME[i]
             
             # 如果裡面有多行數據，你也可以選擇取平均值：
             # baseline_value = df_baseline['Reward'].mean()
