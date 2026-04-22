@@ -218,7 +218,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # for g in range(self.constellation.get_visible_grids(i)):
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
             # if (agent_name == TEST_ID): print(sent_user_count)
-            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.1, 1.0)
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.01, 1.0)
             else: self.episode_tx_cost += actual_flow
 
             # 計算進度增量 → 這才是真正的正向信號

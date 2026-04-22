@@ -1,6 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from param import *
 
 # ==========================================
@@ -16,7 +19,7 @@ file_STATIC = f'satellite_{MY_CONST_NAME}_checkpoints/STATIC_R_test_log.csv'
 # ==========================================
 # 2. Plotting Setup
 # ==========================================
-METRICS = ["Tx_Cost", "Comp_Time"] # Iteration,Reward,Cost_Rate,Lambda,Tx_Cost,Comp_Time
+METRICS = ["Tx_Cost"] # Iteration,Reward,Cost_Rate,Lambda,Tx_Cost,Comp_Time
 
 for m in METRICS:
     ylab = ""

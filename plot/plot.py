@@ -1,6 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from param import *
 
 # ==========================================
@@ -9,10 +12,10 @@ from param import *
 # 定義你的演算法標籤與對應的 CSV 檔案名稱
 # 假設你的檔案分別命名為以下名稱，請依照實際檔名修改
 algorithm_files = {
-    'Greedy Baseline': 'GREEDY_test_log.csv',
-    'Static ERNC': 'STATIC_R_test_log.csv',
-    'Opportunistic ERNC': 'ERNC_test_log.csv',
-    'Myotic MARL': 'MYOTIC_test_log.csv',
+    'Greedy': 'GREEDY_test_log.csv',
+    'Static': 'STATIC_R_test_log.csv',
+    'ERNC': 'ERNC_test_log.csv',
+    'Myopic MARL': 'MYOTIC_test_log.csv',
     'Proposed MARL (Ours)': 'MAPPO_test_log.csv'
 }
 
@@ -34,15 +37,16 @@ metrics_to_plot = {
     'Tx_Cost': {
         'title': 'Tx Cost vs User Number',
         'ylabel': 'Tx Cost'
-    },
-    'Fulfill': {
-        'title': 'Fulfillment vs User Number',
-        'ylabel': 'Fulfill %'
-    },
-    'Comp_Time': {
-        'title': 'Completion Time vs User Number',
-        'ylabel': 'Completion Time (Step)'
     }
+    # ,
+    # 'Fulfill': {
+    #     'title': 'Fulfillment vs User Number',
+    #     'ylabel': 'Fulfill %'
+    # },
+    # 'Comp_Time': {
+    #     'title': 'Completion Time vs User Number',
+    #     'ylabel': 'Completion Time (Step)'
+    # }
 }
 
 # X 軸的欄位名稱 (假設你的 CSV 裡叫做 User_Num)
@@ -53,7 +57,7 @@ styles = {
     'Greedy': {'color': 'gray', 'marker': 'x', 'linestyle': '--'},
     'Static': {'color': 'green', 'marker': 's', 'linestyle': '-.'},
     'ERNC': {'color': 'orange', 'marker': '^', 'linestyle': ':'},
-    'Myotic MARL': {'color': 'red', 'marker': 'o', 'linestyle': '-'},
+    'Myopic MARL': {'color': 'red', 'marker': 'o', 'linestyle': '-'},
     'Proposed MARL (Ours)': {'color': 'blue', 'marker': 'o', 'linestyle': '-'}
 }
 
