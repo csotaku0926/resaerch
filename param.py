@@ -7,11 +7,11 @@ TELESAT_P1 = Const_Param(alt=1325, inc=50.88, p=20, s=11, f=17, t_max=50, target
 TEST_ = Const_Param(alt=540.0, inc=53.2, p=3, s=10, f=17, t_max=90, target_k=15) # p = 13, s = 10
 
 MY_CONST_NAME = "test"
-IS_MYOTIC = True
+IS_MYOTIC = False
 N_TRAIN_ITER = 200
 N_USER = 100
-# TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
-TEST_MODES = ["GREEDY" , "ERNC" , "STATIC_R"]
+TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
+# TEST_MODES = ["GREEDY" , "ERNC" , "STATIC_R"]
 IS_TEST_MODE = True # extra test mode for env
 
 if MY_CONST_NAME == "oneweb":
