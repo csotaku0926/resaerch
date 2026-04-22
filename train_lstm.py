@@ -206,7 +206,6 @@ oneweb: k = 60, Tmax = 50
 
 MY_CONST_PARAM = CONST_PARAM
 T_MAX = MY_CONST_PARAM.t_max
-N_TRAIN_ITER = 30
 LAMBDA_W = 1.0
 TARGET_K = MY_CONST_PARAM.target_k
 
@@ -288,7 +287,9 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 
 
 def env_creator(args):
-    env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE)
+    env = SatelliteDataDisseminationEnv(
+        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER
+    )
     return ParallelPettingZooEnv(env)
 
 def main():
@@ -303,7 +304,9 @@ def main():
         ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     # 取得空間大小
-    dummy_env = SatelliteDataDisseminationEnv(const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE)
+    dummy_env = SatelliteDataDisseminationEnv(
+        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER
+    )
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
     act_space = dummy_env.action_space(sample_agent)

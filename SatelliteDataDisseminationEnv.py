@@ -14,7 +14,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         super().__init__()
 
         # 1. 定義 param
-        self.e = 0.2            # reliability constraint: Pr(T > T_max) <= e
+        self.e = 0.1         # reliability constraint: Pr(T > T_max) <= e
         self.T_max = T_max         # max time step (truncation)
         
         self.M = num_neighbors  # 鄰居數量 (Intra-tier)
@@ -218,7 +218,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # for g in range(self.constellation.get_visible_grids(i)):
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
             # if (agent_name == TEST_ID): print(sent_user_count)
-            if (self.is_unicast): self.episode_tx_cost += actual_flow * sent_user_count
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.1, 1.0)
             else: self.episode_tx_cost += actual_flow
 
             # 計算進度增量 → 這才是真正的正向信號
@@ -266,9 +266,17 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "tx_cost": self.episode_tx_cost,
                 "time": ft,
                 "lambda": self.current_lambda,
-                "sent_user_count": sent_user_count
+                "sent_user_count": sent_user_count,
+                "current_progress": self.constellation.get_user_fulfill_percent()
             } for agent_name in self.agents
         }
+
+        # add global reward (?)
+        total_team_reward = sum(rewards.values())
+        avg_team_reward = total_team_reward / self.N
+        
+        for agent_name in self.agents:
+            rewards[agent_name] = 0.5 * rewards[agent_name] + 0.5 * avg_team_reward
 
         # 當所有任務完成，清空 agents 列表 (PettingZoo 規範)
         # if all_done or is_truncated:
@@ -358,9 +366,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         #     print(cv_matrix)
         
         # 1. 檢查鄰居 (ISL) 是否活著
-        for idx, j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
-            if self.constellation.get_ISL_capacity(agent_id, j, current_time) > 0:
-                action_mask[idx] = 1.0
+        for j, agent_j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
+            if self.constellation.get_ISL_capacity(agent_id, agent_j, current_time) > 0:
+                teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
+                if np.sum(teg_j) > 0:  
+                    action_mask[j] = 1.0
                 
         # # 2. 檢查對地 (Downlink) 是否活著
         if len(self.constellation.get_visible_grids(agent_id, current_time)) > 0:

@@ -155,7 +155,6 @@ def compute_n_star(actual_env, safety_margin=0.3):
     print(f"  [Static-R] p̄={p_avg:.4f}, K={TARGET_K}, N*={n_star:.2f}")
     return n_star
 
-
 def action_static_r(real_id, actual_env, current_time, n_star):
     """
     執行階段：固定送 N* 封包到 downlink，不用 ISL。
@@ -191,8 +190,12 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         log_file_path = os.path.join(checkpoint_dir, f"{mode}_test_log.csv")
         csv_file = open(log_file_path, "w", newline="")
         csv_writer = csv.writer(csv_file)
-        # 寫入標題列 (Headers)
         csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time"])
+
+        curve_file_path = os.path.join(checkpoint_dir, f"{mode}_curve.csv")
+        curve_csv_file = open(curve_file_path, "w", newline="")
+        curve_csv_writer = csv.writer(curve_csv_file)
+        curve_csv_writer.writerow(["step", "fulfill"])
 
     for n_users in user_numbers:
         print(f"\n[{mode}] ══ n_users={n_users} ══")
@@ -220,6 +223,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
             actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
             done          = False
             final_tx_cost = 0.0
+            current_ep_curve = []
 
             while not done:
                 current_time = current_skyfield_time(actual_env)
@@ -251,6 +255,11 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
 
                 obs, _, terminations, truncations, infos = env.step(actions)
 
+                # 【新增 3】：記錄當下 Step 的完賽率
+                step_val = actual_env.current_step
+                current_fulfill = actual_env.constellation.get_user_fulfill_percent()
+                current_ep_curve.append((step_val, current_fulfill))
+
                 if infos:
                     first = list(infos.keys())[0]
                     final_tx_cost = infos[first].get("tx_cost", 0.0)
@@ -258,6 +267,13 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
 
                 done = (terminations.get("__all__", False) or
                         truncations.get("__all__", False))
+                
+            # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
+
+            if n_users == user_numbers[-1] and ep == num_episodes-1: 
+                for step, ful in current_ep_curve: # 這裡簡單取最後一個 ep 當代表即可
+                    curve_csv_writer.writerow([step, ful])
+                    curve_csv_file.flush()
 
             fulfill = actual_env.constellation.get_user_fulfill_percent()
             tx_costs.append(final_tx_cost)
@@ -275,6 +291,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
         csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time])
         csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
+
 
     csv_file.close()
 
