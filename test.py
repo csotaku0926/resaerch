@@ -57,7 +57,7 @@ def current_skyfield_time(actual_env):
 # ╚══════════════════════════════════════════════════════╝
 def action_greedy_rlnc(real_id, actual_env, current_time):
     M             = actual_env.M
-    Tw            = actual_env.Tw
+    Tw            = 1
     constellation = actual_env.constellation
     action        = np.zeros(M + 1, dtype=np.float32)
 

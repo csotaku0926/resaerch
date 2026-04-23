@@ -7,7 +7,7 @@ from skyfield.api import load
 from Constellation import Constellation
 from param import *
 
-N_USER = 50
+# N_USER = 50
 CONST_ = CONST_PARAM
 TMAX = CONST_.t_max
 TARGET_K = CONST_.target_k
@@ -42,7 +42,7 @@ def check_roi_coverage(T_max=100, step_second=10):
                 visible_found = True
 
                 
-def run_diagnostic(T_max=100, step_second=10):
+def run_diagnostic(step_second=10, is_all_in=True, do_log=False):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
@@ -67,7 +67,7 @@ def run_diagnostic(T_max=100, step_second=10):
     print(f"- 衛星數量: {n_agents}")
     print(f"- 網格數量: {total_grids}")
     print(f"- 最大步數 (T_max): {T_max}")
-    print(f"- 初始完成度: {initial_fulfill:.2%}")
+    print(f"- action is all ones: {is_all_in}")
     print("-" * 30)
 
     # 2. 測試：如果所有衛星「完全躺平」(零動作)
@@ -99,8 +99,12 @@ def run_diagnostic(T_max=100, step_second=10):
                               current_dt.hour, current_dt.minute, current_dt.second)
         
 
-        actions = {agent: np.ones(env.action_spaces[agent].shape, dtype=np.float32)
-                    for agent in env.agents}
+        if is_all_in:
+            actions = {agent: np.ones(env.action_spaces[agent].shape, dtype=np.float32)
+                        for agent in env.agents}
+        else:
+            actions = {agent: np.array([0.1, 0.9], dtype=np.float32)
+                        for agent in env.agents}
 
         # example toy strategy perform better than "baseline"
         # CV_0 = env.constellation.get_teg_downlink_volume(test_id, 2, current_time) 
@@ -111,7 +115,7 @@ def run_diagnostic(T_max=100, step_second=10):
         #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32)
         #             for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
-        print("[OBS]: ", obs[TEST_ID]["local_obs"])
+        if (do_log): print("[OBS]: ", obs[TEST_ID]["local_obs"])
         # print("[INFO]: ", infos[TEST_ID]["sent_user_count"]) <-- problematic
         
          # 檢查每顆衛星是否看到任何 Ground Grid
@@ -120,7 +124,7 @@ def run_diagnostic(T_max=100, step_second=10):
             # target_name = "Starlink_Shell2_61_0"
             # _id = env.get_id_by_name(target_name)
             CV_vec = env.constellation.get_teg_downlink_volume(i, 2, current_time)
-            if len(grids) > 0:
+            if len(grids) > 0 and do_log:
                 # print("TEST:", env.constellation.get_teg_downlink_volume(test_id, 2, current_time))
                 print(f"[Step {s:03d} | {current_dt.strftime('%H:%M:%S')}] 衛星 {sat.name} 進入 RoI ! 可視網格: {grids}\
                 CV: {CV_vec} buf: {sat.get_buffer()}")
@@ -176,8 +180,8 @@ def reset_test():
     print([u.lat for u in env.constellation.user_grids[0].users])
 
 def main():
-    run_diagnostic(T_max=TMAX)
-    # reset_test()
+    run_diagnostic(is_all_in=True)
+    run_diagnostic(is_all_in=False)
    
 
 if __name__ == '__main__':

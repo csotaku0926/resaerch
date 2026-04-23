@@ -412,7 +412,7 @@ class Constellation:
         total_bits_in_step = actual_rate_bps * self.step_seconds
         max_packets = total_bits_in_step / self.packet_size_bits
         
-        return int(10000 / dist) # --> 4 #int(max_packets) --> 0 
+        return 5 #int(10000 / dist) # --> 4 #int(max_packets) --> 0 
 
     def get_leo_buffer(self, agent_id):
         return self.agents[agent_id].get_buffer()   
@@ -477,7 +477,7 @@ class Constellation:
 
         return 5 #int(max_packets)
 
-    def calculate_erasure_rate(self, agent_id: int, user: User, current_time):
+    def calculate_erasure_rate(self, agent_id: int, user: User, current_time, do_log=False):
         """
         基於 LEO 衛星幾何與路徑損失的連續異質抹除率計算 (link quality)
         """
@@ -490,6 +490,7 @@ class Constellation:
         
         # 1. 物理視距極限保護
         if elevation_deg < 20.0:
+            if do_log: print("elev:", elevation_deg)
             return 1.0 # 仰角過低，被地球曲率或建築物完全遮蔽，物理上100%掉包
             
         # 2. 嚴謹的連續物理計算：自由空間路徑損失 (FSPL)
@@ -520,7 +521,7 @@ class Constellation:
         # 這裡沒有武斷的 step，只有平滑的機率轉換
         # =============================================================
         # 假設 SNR_THRESHOLD 是 5.0 dB (低於這個值，掉包率開始急劇上升)
-        SNR_THRESHOLD = 8.0
+        SNR_THRESHOLD = 10.0
         
         # 將 SNR 的差距轉換為 Erasure Rate (範圍 0~1)
         # 使用 sigmoid 函數： 1 / (1 + exp(k * (x - x0)))
@@ -528,6 +529,7 @@ class Constellation:
         steepness = 1.5 
         erasure_rate = 1.0 / (1.0 + np.exp(steepness * (snr_db - SNR_THRESHOLD)))
         final_erasure = np.clip(erasure_rate, 0.0, 1.0)
+        if do_log: print("elev:", elevation_deg, "era:", final_erasure)
 
         # ==========================================
         # 🌪️ [關鍵新增] 突發狀況：週期性極端氣候遮蔽 (Deterministic Blockage)

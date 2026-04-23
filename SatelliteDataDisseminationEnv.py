@@ -14,7 +14,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         super().__init__()
 
         # 1. 定義 param
-        self.e = 0.1         # reliability constraint: Pr(T > T_max) <= e
+        self.e = 0.2         # reliability constraint: Pr(T > T_max) <= e
         self.T_max = T_max         # max time step (truncation)
         
         self.M = num_neighbors  # 鄰居數量 (Intra-tier)
@@ -38,7 +38,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
 
-        self.PROGRESS_SCALE = 10.0
+        self.PROGRESS_SCALE = 2.0
         self.COST_SCALE = 1.0
 
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
@@ -93,6 +93,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
         self.reward_factor = 1.0 # scale down reward
         self.reward_factor_time = 1e5
+        self.ISL_cost_factor = 0.2
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -190,11 +191,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 contact_capacity = self.constellation.get_ISL_capacity(i, agent_j, current_time)
                 buf_i = self.constellation.get_leo_buffer(i)
                 actual_flow = min(buf_i, action_probs[j] * contact_capacity * action_mask[j])
+                # print("ISL:", actual_flow)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=agent_j, amount=actual_flow)
                 # count in "actual_flow"
-                acc_cost += actual_flow
+                acc_cost += actual_flow * self.ISL_cost_factor
                 acc_max_cost += max_buf
-                self.episode_tx_cost += actual_flow
+                self.episode_tx_cost += actual_flow * self.ISL_cost_factor
 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()
@@ -218,7 +220,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # for g in range(self.constellation.get_visible_grids(i)):
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
             # if (agent_name == TEST_ID): print(sent_user_count)
-            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.01, 1.0)
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.02, 1.0)
             else: self.episode_tx_cost += actual_flow
 
             # 計算進度增量 → 這才是真正的正向信號
