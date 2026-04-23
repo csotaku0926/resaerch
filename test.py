@@ -111,69 +111,88 @@ def action_ernc(real_id, actual_env, current_time):
     return action
 
 
-# ╔══════════════════════════════════════════════════════╗
-# ║  B3: Static Redundancy                               ║
-# ║                                                      ║
-# ║  邏輯：                                              ║
-# ║    【離線】根據長期平均 erasure rate p̄ 算出 N*        ║
-# ║       N* = K / (1 - p̄) × (1 + safety_margin)       ║
-# ║    【執行】每次 downlink contact 固定送 N* 封包       ║
-# ║    不看當前 buffer 大小、不看 deficit、不用 ISL      ║
-# ║    N* 在整個測試過程中不變                           ║
-# ╚══════════════════════════════════════════════════════╝
-def compute_n_star(actual_env, safety_margin=0.3):
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  B3: Static Redundancy (Contact-Plan Based Fixed Forwarding)     ║
+# ║                                                                  ║
+# ║  概念來源：                                                      ║
+# ║    Fraire et al., "Design Challenges in Contact Plans for        ║
+# ║    Disruption-Tolerant Satellite Networks",                      ║
+# ║    IEEE Communications Magazine, 2015                            ║
+# ║                                                                  ║
+# ║  與 ER-NC 的關鍵差異：                                          ║
+# ║    ER-NC  → 完全不用 ISL，每顆衛星各自打地面                    ║
+# ║    Static-R → 使用 ISL，但 ISL 比例由離線接觸統計決定，         ║
+# ║               執行時固定不變（不看即時狀態）                    ║
+# ║                                                                  ║
+# ║  邏輯：                                                          ║
+# ║    【離線】掃描整個 episode 的接觸視窗，                         ║
+# ║           統計每顆衛星平均的 downlink / ISL 接觸時間比例，      ║
+# ║           算出固定分配向量 static_plan[sat_id] = [r0..rM]       ║
+# ║    【執行】直接套用固定比例：action = static_plan[sat_id]        ║
+# ║           不管當前 buffer 多少、deficit 多少、channel 狀態如何  ║
+# ╚══════════════════════════════════════════════════════════════════╝
+def compute_static_plan(actual_env):
     """
-    離線估算 N*：對軌道多個時刻取樣，
-    算出所有衛星對所有用戶的平均 erasure rate p̄，
-    回傳 N* = K / (1 - p̄) × (1 + safety_margin)
+    離線階段：統計整個 episode 中每顆衛星的平均接觸容量，
+    算出固定的流量分配比例 static_plan。
 
-    參考: Courtade & Wesel, IEEE Trans. Commun., 2011
+    static_plan[sat_id] = np.array([r_isl0, r_isl1, ..., r_isl_{M-1}, r_downlink])
+    所有比例加總 <= 1.0，代表「把 buffer 按此比例分配」。
+
+    文獻精神：離線的 contact plan 決定轉發策略，
+    等同於 CGR 的最簡化版本（有 ISL relay，但無即時 volume tracking）。
     """
     constellation = actual_env.constellation
-    TARGET_K      = constellation.target_k
+    M             = 1
+    n_sats        = len(constellation.agents)
     ts            = actual_env.ts
     start_dt      = actual_env.start_dt
     step_sec      = actual_env.step_seconds
 
-    erasure_samples = []
-    sample_steps = np.linspace(0, actual_env.T_max - 1, 10, dtype=int)
+    # 累積每顆衛星在各 link 上的「有效接觸步數」
+    # contact_counts[sat_id][j] = 這條 link 在整個 episode 有接觸的步數
+    contact_counts = np.zeros((n_sats, M + 1), dtype=np.float32)
+
+    sample_steps = np.linspace(0, actual_env.T_max - 1, 20, dtype=int)
 
     for s in sample_steps:
         dt = start_dt + timedelta(seconds=int(s) * step_sec)
         t  = ts.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
-        for sat_id in range(len(constellation.agents)):
-            visible = constellation.get_visible_grids(sat_id, t)
-            for gi in visible:
-                for user in constellation.user_grids[gi].users:
-                    p = constellation.calculate_erasure_rate(sat_id, user, t)
-                    if 0.0 <= p < 1.0:
-                        erasure_samples.append(p)
+        for sat_id in range(n_sats):
+            # ISL：鄰居在這個時刻是否有 capacity
+            for idx, neighbor_id in enumerate([constellation.get_neighbors(sat_id)[0]]):
+                cap = constellation.get_ISL_capacity(sat_id, neighbor_id, t)
+                if cap > 0:
+                    contact_counts[sat_id][idx] += cap   # 用 capacity 加權，而非只計次數
 
-    p_avg  = float(np.mean(erasure_samples)) if erasure_samples else 0.3
-    n_star = (TARGET_K / max(1e-9, 1.0 - p_avg)) * (1.0 + safety_margin)
-    print(f"  [Static-R] p̄={p_avg:.4f}, K={TARGET_K}, N*={n_star:.2f}")
-    return n_star
+            # Downlink：這個時刻是否有可見 grid
+            if len(constellation.get_visible_grids(sat_id, t)) > 0:
+                cap_dl = constellation.get_downlink_capacity()
+                contact_counts[sat_id][M] += cap_dl
 
-def action_static_r(real_id, actual_env, current_time, n_star):
+    # 把累積接觸量轉成比例：按接觸量等比例分配，和為 1
+    static_plan = np.zeros((n_sats, M + 1), dtype=np.float32)
+    for sat_id in range(n_sats):
+        total = np.sum(contact_counts[sat_id])
+        if total > 0:
+            static_plan[sat_id] = contact_counts[sat_id] / total
+
+    print(f"  [Static-R] 離線計畫計算完成，範例 sat_0: {np.round(static_plan[0], 3)}")
+    return static_plan
+
+
+def action_static_r(real_id, actual_env, current_time, static_plan):
     """
-    執行階段：固定送 N* 封包到 downlink，不用 ISL。
-    N* 是離線算好的常數，不隨即時狀況改變。
+    執行階段：直接套用離線計算好的固定比例。
+    不看即時狀態，不做任何調整。
     """
-    M             = actual_env.M
-    constellation = actual_env.constellation
-    action        = np.zeros(M + 1, dtype=np.float32)
+    buf = actual_env.constellation.get_leo_buffer(real_id)
+    if buf <= 0:
+        return np.zeros(actual_env.M + 1, dtype=np.float32)
 
-    visible = constellation.get_visible_grids(real_id, current_time)
-    buf     = constellation.get_leo_buffer(real_id)
-    cap_dl  = constellation.get_downlink_capacity()
-
-    if len(visible) == 0 or buf == 0: return action
-
-    target_flow = min(n_star, cap_dl, buf)
-    action[M]   = float(np.clip(target_flow / cap_dl, 0.0, 1.0))
-
-    return action
+    # 直接回傳固定比例，環境 step() 會把它乘以 buf 當作 desired_flow
+    return static_plan[real_id].copy()
 
 
 # ╔══════════════════════════════════════════════════════╗
@@ -206,13 +225,13 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         )
         env = ParallelPettingZooEnv(raw_env)
 
-        # B3：離線預算 N*，整個 n_users 設定共用一個值
-        n_star = None
+        # B3：離線計算固定分配計畫，整個 n_users 設定共用一個值
+        static_plan = None
         if mode == "STATIC_R":
             env.reset()
             actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
-            print("  計算 N*（離線步驟）...")
-            n_star = compute_n_star(actual_env)
+            print("  計算 Static Plan（離線步驟）...")
+            static_plan = compute_static_plan(actual_env)
 
         tx_costs      = []
         comp_times    = []
@@ -251,7 +270,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
 
                     elif mode == "STATIC_R":
                         actions[agent_id] = action_static_r(
-                            real_id, actual_env, current_time, n_star)
+                            real_id, actual_env, current_time, static_plan)
 
                 obs, _, terminations, truncations, infos = env.step(actions)
 

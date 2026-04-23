@@ -9,10 +9,10 @@ TEST2_ = Const_Param(alt=540.0, inc=53.2, p=6, s=10, f=17, t_max=90, target_k=60
 
 MY_CONST_NAME = "test"
 IS_MYOTIC = True
-N_TRAIN_ITER = 300
+N_TRAIN_ITER = 200
 N_USER = 100
 # TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["ERNC" , "STATIC_R", "GREEDY"]
+TEST_MODES = ["STATIC_R"] # "ERNC" , "STATIC_R", "GREEDY"
 IS_TEST_MODE = True # extra test mode for env
 
 if MY_CONST_NAME == "oneweb":
