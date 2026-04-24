@@ -78,9 +78,10 @@ def plot_step_ful_curves():
     plt.legend(loc="lower right", fontsize=12)
 
     plt.tight_layout()
-    plt.savefig(f'fig/{MY_CONST_NAME}_all_curves_comparison.png', dpi=300)
+    fig_name = f'fig/{MY_CONST_NAME}_N{USER_NUM}_all_curves_comparison.png'
+    plt.savefig(fig_name, dpi=300)
     plt.show()
-    print(f"已成功儲存 {MY_CONST_NAME}_all_curves_comparison.png")
+    print(f"已成功儲存 {fig_name}")
 
 def plot_cost_efficiency():
     plt.figure(figsize=(10, 6))
@@ -120,4 +121,5 @@ def plot_cost_efficiency():
 
 
 if __name__ == "__main__":
-    plot_cost_efficiency()
+    plot_step_ful_curves() 
+    # plot_cost_efficiency()
