@@ -11,8 +11,8 @@ MY_CONST_NAME = "test"
 IS_MYOTIC = True
 N_TRAIN_ITER = 200
 N_USER = 100
-# TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["STATIC_R"] # "ERNC" , "STATIC_R", "GREEDY"
+TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
+# TEST_MODES = ["STATIC_R"] # "ERNC" , "STATIC_R", "GREEDY"
 IS_TEST_MODE = True # extra test mode for env
 
 if MY_CONST_NAME == "oneweb":

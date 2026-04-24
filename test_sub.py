@@ -115,6 +115,7 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False):
         #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32)
         #             for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
+        print("[reward]:", rewards[TEST_ID])
         if (do_log): print("[OBS]: ", obs[TEST_ID]["local_obs"])
         # print("[INFO]: ", infos[TEST_ID]["sent_user_count"]) <-- problematic
         

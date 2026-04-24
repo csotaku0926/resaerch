@@ -340,6 +340,9 @@ class Constellation:
     
     def get_id_by_name(self, name: str):
         return self.name_to_idx[name]
+    
+    def get_name_by_id(self, idx:int):
+        return self.agents[idx].name
 
     def get_neighbors(self, sat_id: int):
         # forward: (s+1) % N

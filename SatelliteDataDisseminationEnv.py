@@ -38,8 +38,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
 
-        self.PROGRESS_SCALE = 10.0
-        self.COST_SCALE = 1.0
+        self.PROGRESS_SCALE = 1.0
+        self.COST_SCALE = 0.0
 
         # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
         self.is_ORNC_baseline = is_ORNC
@@ -49,6 +49,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 加入這兩行 (PettingZoo 鐵規則)
         self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
         self.agents = self.possible_agents[:]
+
+        # 初始化 N x N 的虛擬帳本 (row: 資料原創者, col: 資料目前持有者)
+        # self.ledger = np.zeros((self.N, self.N), dtype=np.float32)
+        self.agent_progress = np.zeros(self.N, dtype=np.float32)
 
         self.tx_cost_avg = {}
         for agent_name in self.agents:
@@ -109,6 +113,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 這裡重置你的 LEO buffers 與地面的 received_dof
         self.constellation.reset()
 
+        # 重置帳本，並把初始 Buffer 記在各自衛星名下
+        # self.ledger = np.zeros((self.N, self.N), dtype=np.float32)
+        self.agent_progress = np.zeros(self.N, dtype=np.float32)
+
         for agent_name in self.agents:
             self.tx_cost_avg[agent_name] = 0.0
 
@@ -143,36 +151,28 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         current_time = self.ts.utc(current_dt.year, current_dt.month, current_dt.day,
                                    current_dt.hour, current_dt.minute, current_dt.second)
         
-        # 2. 執行流量分配邏輯 (Flow Allocation)
-        # MEO source distribution
+        # 2. 執行流量分配邏輯 (MEO Flow Allocation)
         self.constellation.meo_broadcast_to_leos(current_time)
 
         # 3. 計算 Reward (獎勵設計)
-        rewards = {}
-        ft = self.constellation.get_finish_time_cost()
+        rewards = {a: 0.0 for a in self.agents}
+        sent_user_count = 0
 
+        ft = self.constellation.get_finish_time_cost()
         max_buf = self.constellation.get_leo_max_buffer()
+        old_ful = self.constellation.get_user_received_percent()
 
         all_done = bool(self.check_all_grids_fulfilled())
         is_truncated = bool(self.current_step >= self.T_max - 1)
         is_done = all_done or is_truncated
-        
-        old_fulfill = self.constellation.get_user_fulfill_percent()
 
         for agent_name in self.agents:
             i = self.constellation.get_id_by_name(agent_name)
-            rewards[agent_name] = 0 
             # 神經網路輸出的比例 (0~1)
             raw_action = actions[agent_name] # {"LEO_i": action}
-
-            # 【總量守恆限制】確保分配總和不超過 1.0
             action_sum = np.sum(raw_action)
-            if action_sum > 1.0:
-                # 如果總和大於 1，就按比例壓縮 (例如 2.5 會被等比例壓縮成總和剛好 1.0)
-                action_probs = raw_action / action_sum
-            else:
-                # 如果總和小於或等於 1，代表衛星想「保留」一部分封包在自己的 Buffer 裡不傳，這是合法的！
-                action_probs = raw_action
+            if action_sum > 1.0:    action_probs = raw_action / action_sum
+            else:                   action_probs = raw_action
 
             # --- 套用物理拘束 (Contact Volume) ---
             # Intra-tier (給鄰居)
@@ -209,7 +209,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             acc_max_cost += max_buf
             self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
 
+            # record progress as reward
+            
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
+            
+
             if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.02, 1.0)
             else: self.episode_tx_cost += actual_flow
 
@@ -218,9 +222,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
 
         # caclulate progress
-        new_fulfill = self.constellation.get_user_fulfill_percent()
-        delta_fulfill = new_fulfill - old_fulfill
 
+        new_ful = self.constellation.get_user_received_percent()
+        delta_fulfill = new_ful - old_ful
         for agent_name in self.agents:
             rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
         
@@ -263,13 +267,6 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 "current_progress": self.constellation.get_user_fulfill_percent()
             } for agent_name in self.agents
         }
-
-        # add global reward (?)
-        total_team_reward = sum(rewards.values())
-        avg_team_reward = total_team_reward / self.N
-        
-        for agent_name in self.agents:
-            rewards[agent_name] = 0.5 * rewards[agent_name] + 0.5 * avg_team_reward
 
         return observations, rewards, terminations, truncations, infos
 
