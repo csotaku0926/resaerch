@@ -295,6 +295,31 @@ def env_creator(args):
 def main():
     ray.init()
 
+    # ==========================================
+    # GPU 抓漏檢查碼
+    # ==========================================
+    print("\n" + "="*40)
+    print("硬體與 GPU 狀態檢查")
+    print("="*40)
+    
+    # 1. 檢查 PyTorch 是否支援 CUDA
+    import torch
+    cuda_available = torch.cuda.is_available()
+    print(f"1. PyTorch CUDA 是否可用: {cuda_available}")
+    if cuda_available:
+        print(f"   -> 抓到的 GPU 型號: {torch.cuda.get_device_name(0)}")
+    else:
+        print("   -> ⚠️ 警告: PyTorch 抓不到 GPU！你可能安裝到了 CPU 版本的 PyTorch。")
+
+    # 2. 檢查 Ray 叢集是否偵測到 GPU
+    resources = ray.cluster_resources()
+    gpu_count = resources.get("GPU", 0.0)
+    print(f"2. Ray 叢集可用 GPU 數量: {gpu_count}")
+    if gpu_count == 0.0:
+        print("   -> ⚠️ 警告: Ray 沒有偵測到任何 GPU！")
+    print("="*40 + "\n")
+    # ==========================================
+
     # 註冊環境與模型
     env_name = "satellite_nc_env"
     register_env(env_name, env_creator)
@@ -312,7 +337,6 @@ def main():
     act_space = dummy_env.action_space(sample_agent)
 
     n_runner = 2
-    frag_len = 100
     train_batch_size = dummy_env.constellation.t * T_MAX * n_runner
 
     # 所有衛星共用這一個大腦 (包含 Actor 和 Critic)
@@ -330,9 +354,20 @@ def main():
         # .rollouts(num_rollout_workers=2, rollout_fragment_length="auto")
         .env_runners(
             num_env_runners=n_runner, 
-            rollout_fragment_length=frag_len
+            num_envs_per_env_runner=1,         # 每個工人負責一個環境
+            # 【對症下藥 1】：不要用 auto，改成一個較小的固定數字。
+            # 讓工人每收集 30 步就先交卷一次，不要一口氣算幾百步。
+            rollout_fragment_length=30,  
+            
+            # 【對症下藥 2】：大幅延長主程式的等待時間。
+            # 預設通常是 60 秒，我們直接給它 600 秒 (10分鐘) 的寬容度，
+            # 讓 Skyfield 有充足的時間慢慢算。
+            sample_timeout_s=600.0
         ) 
-        .resources(num_gpus=1) # 根據硬體調整
+        .resources(
+            num_gpus=1,                        # 1 張 GPU 給 Learner (訓練網路)
+            num_cpus_per_worker=1              # 每個採樣工人配給 1 個 CPU 核心
+        )
         .multi_agent(
             policies=policies,
             policy_mapping_fn=policy_mapping_fn,

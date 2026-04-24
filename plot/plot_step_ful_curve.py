@@ -62,9 +62,9 @@ def plot_all_curves():
         plt.plot(steps, fulfills_100, color=info["color"], label=info["label"], linewidth=2.5)
 
     # 圖表美化設定
-    plt.title('Fulfill Rate CDF over Time')
+    # plt.title('Fulfill Rate CDF over Time')
     plt.xlabel('Time Step')
-    plt.ylabel('Fulfill Rate (%)')
+    plt.ylabel('Task Completion Rate (%)')
     
     # 設定 Y 軸 0~105 留一點頂部空間，X 軸鎖定到最長步數
     plt.ylim(0, 105)

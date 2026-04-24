@@ -24,7 +24,7 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [1, 50, 100, 200, 400]
+USER_NUMBERS = [1, 100, 200, 300, 400]
 NUM_EPISODES = 5
 T_MAX = CONST_PARAM.t_max
 print(f"[參數確認]")
@@ -198,7 +198,7 @@ def action_static_r(real_id, actual_env, current_time, static_plan):
 # ╔══════════════════════════════════════════════════════╗
 # ║  測試主迴圈                                          ║
 # ╚══════════════════════════════════════════════════════╝
-def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
+def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True):
     avg_tx_costs      = []
     avg_fulfill_rates = []
     avg_comp_times    = []
@@ -211,13 +211,15 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time"])
 
-        curve_file_path = os.path.join(checkpoint_dir, f"{mode}_curve.csv")
-        curve_csv_file = open(curve_file_path, "w", newline="")
-        curve_csv_writer = csv.writer(curve_csv_file)
-        curve_csv_writer.writerow(["step", "fulfill"])
 
     for n_users in user_numbers:
         print(f"\n[{mode}] ══ n_users={n_users} ══")
+
+        if write_curve:
+            curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{n_users}_curve.csv")
+            curve_csv_file = open(curve_file_path, "w", newline="")
+            curve_csv_writer = csv.writer(curve_csv_file)
+            curve_csv_writer.writerow(["step", "tx_cost", "fulfill"])
 
         raw_env = SatelliteDataDisseminationEnv(
             const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
@@ -277,7 +279,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
                 # 【新增 3】：記錄當下 Step 的完賽率
                 step_val = actual_env.current_step
                 current_fulfill = actual_env.constellation.get_user_fulfill_percent()
-                current_ep_curve.append((step_val, current_fulfill))
+                current_tx_cost = actual_env.episode_tx_cost
+                current_ep_curve.append((step_val, current_tx_cost, current_fulfill))
 
                 if infos:
                     first = list(infos.keys())[0]
@@ -289,9 +292,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
                 
             # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
 
-            if n_users == user_numbers[-1] and ep == num_episodes-1: 
-                for step, ful in current_ep_curve: # 這裡簡單取最後一個 ep 當代表即可
-                    curve_csv_writer.writerow([step, ful])
+            if write_curve and ep == num_episodes-1: 
+                for step, tx, ful in current_ep_curve: # 這裡簡單取最後一個 ep 當代表即可
+                    curve_csv_writer.writerow([step, tx, ful])
                     curve_csv_file.flush()
 
             fulfill = actual_env.constellation.get_user_fulfill_percent()
@@ -308,51 +311,15 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True):
         avg_fulfill_rates.append(avg_ful)
         avg_comp_times.append(avg_time)
         print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
-        csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time])
-        csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
+        if write_log:
+            csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time])
+            csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
 
+        if write_curve: curve_csv_file.close()
 
-    csv_file.close()
+    if write_log: csv_file.close()
 
     return avg_tx_costs, avg_fulfill_rates, avg_comp_times
-
-
-def plot_results(user_numbers, results):
-    colors  = {"MAPPO": "blue", "GREEDY": "green",
-               "ERNC": "orange", "STATIC_R": "red"}
-    markers = {"MAPPO": "o", "GREEDY": "s",
-               "ERNC": "^", "STATIC_R": "D"}
-    labels  = {
-        "MAPPO":    "MAPPO-CTDE (proposed)",
-        "GREEDY":   "B1: Greedy-RLNC",
-        "ERNC":     "B2: ER-NC",
-        "STATIC_R": "B3: Static Redundancy",
-    }
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-
-    for mode, (tx_costs, fulfill_rates) in results.items():
-        kw = dict(marker=markers[mode], linestyle='-',
-                  color=colors[mode], label=labels[mode])
-        ax1.plot(user_numbers, tx_costs, **kw)
-        ax2.plot(user_numbers, fulfill_rates, **kw)
-
-    ax1.set_title('Transmission Cost vs Users')
-    ax1.set_xlabel('Number of Users')
-    ax1.set_ylabel('Avg Tx Cost (packets)')
-    ax1.grid(True, linestyle='--', alpha=0.6)
-    ax1.legend()
-
-    ax2.set_title('Fulfill Rate vs Users')
-    ax2.set_xlabel('Number of Users')
-    ax2.set_ylabel('Avg Fulfill Rate')
-    ax2.set_ylim(0, 1.05)
-    ax2.grid(True, linestyle='--', alpha=0.6)
-    ax2.legend()
-
-    plt.tight_layout()
-    plt.savefig('baseline_comparison.png', dpi=300)
-    plt.show()
-    print("已儲存 baseline_comparison.png")
 
 
 def main():
@@ -387,7 +354,6 @@ def main():
         tx_costs, fulfill_rates, times = run_mode(
             mode, USER_NUMBERS, NUM_EPISODES, algo=algo)
 
-    # plot_results(USER_NUMBERS, {MODE: (tx_costs, fulfill_rates)})
     ray.shutdown()
 
 

@@ -160,7 +160,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         ft = self.constellation.get_finish_time_cost()
         max_buf = self.constellation.get_leo_max_buffer()
-        old_ful = self.constellation.get_user_received_percent()
+        old_ful = self.constellation.get_user_fulfill_percent()
 
         all_done = bool(self.check_all_grids_fulfilled())
         is_truncated = bool(self.current_step >= self.T_max - 1)
@@ -223,7 +223,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # caclulate progress
 
-        new_ful = self.constellation.get_user_received_percent()
+        new_ful = self.constellation.get_user_fulfill_percent()
         delta_fulfill = new_ful - old_ful
         for agent_name in self.agents:
             rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill

@@ -15,7 +15,7 @@ Telesat:
 OneWeb:
 """
 class Const_Param:
-    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10):
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
@@ -23,6 +23,8 @@ class Const_Param:
         self.f = f                   # 相位因子
         self.t_max = t_max
         self.target_k = target_k
+        self.dl_cp = dl_cp
+        self.max_buf = max_buf
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
@@ -36,6 +38,8 @@ class Constellation:
         self.p = param.p                   # 軌道面數 (Planes)
         self.s = param.s                   # 每面衛星數 (Sats per plane)
         self.f = param.f                   # 相位因子
+        self.dl_cp = param.dl_cp
+        self.max_buf = param.max_buf
         self.t = self.p * self.s                # 總共 1584 顆
         
         self.sat_id = 0
@@ -101,9 +105,9 @@ class Constellation:
                 target_k=self.target_k
             )
             raan_offset = self.get_raan_offset()
-            self.build_constellation(raan_offset=raan_offset)
+            self.build_constellation(raan_offset=raan_offset, max_buf=self.max_buf)
         else:
-            self.build_constellation()
+            self.build_constellation(max_buf=self.max_buf)
             self.initialize_users_along_tracks(self.target_k)
 
     def reset(self):
@@ -124,7 +128,7 @@ class Constellation:
         else:
             self.initialize_users_along_tracks(self.target_k)
 
-    def build_constellation(self, raan_offset=0.0, rewind_angle_deg=45.0, do_log=False):
+    def build_constellation(self, raan_offset=0.0, rewind_angle_deg=45.0, do_log=False, max_buf=30):
         # # 載入時間系統
         ts = load.timescale()
         # # 設定一個基準紀元時間 (Epoch)，所有衛星從這點開始跑
@@ -170,7 +174,7 @@ class Constellation:
                 sat_name = f"Starlink_Shell2_{p}_{s}"
                 skyfield_sat = EarthSatellite.from_satrec(satrec, ts)
                 skyfield_sat.name = sat_name
-                sat_i = RelaySatellite(skyfield_sat)
+                sat_i = RelaySatellite(skyfield_sat, max_buf=max_buf)
                 self.name_to_idx[ sat_name ] = self.sat_id
                 
                 self.agents.append(sat_i)
@@ -478,7 +482,7 @@ class Constellation:
         # user_num = self.users_per_grid
         # user_factor = max(1.0, user_num / 10.0)
 
-        return 5 #int(max_packets)
+        return self.dl_cp #int(max_packets)
 
     def calculate_erasure_rate(self, agent_id: int, user: User, current_time, do_log=False):
         """
