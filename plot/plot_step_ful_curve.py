@@ -12,15 +12,15 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 USER_NUM = 100
 
 files_info = {
-    "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "MAPPO-CTDE (TEG)"},
+    "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "MAPPO-CTDE (Proposed)"},
     "MYOTIC": {"file": f"MYOTIC_{USER_NUM}_curve.csv", "color": "red", "label": "MYOPIC-CTDE"},
-    "GREEDY": {"file": f"GREEDY_{USER_NUM}_curve.csv", "color": "gray", "label": "Greedy-RLNC"},
+    "GREEDY": {"file": f"GREEDY_{USER_NUM}_curve.csv", "color": "gray", "label": "Greedy"},
     "ERNC": {"file": f"ERNC_{USER_NUM}_curve.csv", "color": "orange", "label": "ER-NC"},
     "STATIC": {"file": f"STATIC_R_{USER_NUM}_curve.csv", "color": "green", "label": "Static Redundancy"},
 }
 
 
-def plot_step_ful_curves():
+def plot_step_ful_curves(): 
     plt.figure(figsize=(10, 6))
     
     # 階段一：先掃描一次所有的 CSV，找出「最長的步數 (Global Max Step)」
@@ -83,30 +83,41 @@ def plot_step_ful_curves():
     print(f"已成功儲存 {MY_CONST_NAME}_all_curves_comparison.png")
 
 def plot_cost_efficiency():
-    # 定義要畫的算法與對應的顏色
+    plt.figure(figsize=(10, 6))
 
-    plt.figure(figsize=(8, 6))
-
-    for mode in modes:
-        file_path = os.path.join(checkpoint_dir, f"{mode}_curve.csv")
+    # 統一使用最上方的 files_info 和 DIR_NAME
+    for algo, info in files_info.items():
+        file_path = os.path.join(DIR_NAME, info["file"])
+        
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
             
-            # X軸是累積流量 (Tx Cost)，Y軸是任務完成率 (Fulfill)
+            # X軸是累積流量 (tx_cost)，Y軸是任務完成率 (fulfill)
+            # Matplotlib 會自動把 tx_cost 當作連續刻度，完美對齊
             plt.plot(df["tx_cost"], df["fulfill"], 
-                     color=colors[mode], label=labels[mode], linewidth=2.5)
+                     color=info["color"], label=info["label"], linewidth=2.5)
+        else:
+            print(f"[Cost Efficiency] 找不到檔案: {file_path}")
 
-    plt.title('Cost Efficiency: Fulfill Rate vs. Transmission Cost', fontsize=14)
+    plt.title('Cost Efficiency: Fulfill Rate vs. Accumulated Tx Cost', fontsize=14, fontweight='bold')
     plt.xlabel('Accumulated Transmission Cost (packets)', fontsize=12)
     plt.ylabel('User Fulfill Rate', fontsize=12)
+    
+    # 讓 Y 軸的顯示範圍稍微留空，畫面更好看
     plt.ylim(0, 1.05)
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=10, loc='lower right')
+    
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=12, loc='lower right')
     
     plt.tight_layout()
-    plt.savefig('fig/cost_efficiency_curve.png', dpi=300)
-    print("已儲存 cost_efficiency_curve.png")
+    
+    # 確保 fig 資料夾存在
+    os.makedirs('fig', exist_ok=True)
+    save_path = f'fig/{MY_CONST_NAME}_N{USER_NUM}_cost_efficiency_curve.png'
+    plt.savefig(save_path, dpi=300)
     plt.show()
+    print(f"已成功儲存 {save_path}")
+
 
 if __name__ == "__main__":
-    plot_all_curves()
+    plot_cost_efficiency()
