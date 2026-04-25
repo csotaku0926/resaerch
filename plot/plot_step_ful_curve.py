@@ -9,7 +9,7 @@ from param import *
 # 1. 定義你要比較的算法與對應的 CSV 檔名
 # 你可以自行把其他 baseline 的 csv 檔名加進來
 DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
-USER_NUM = 100
+USER_NUM = 400
 
 files_info = {
     "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "MAPPO-CTDE (Proposed)"},
@@ -122,4 +122,4 @@ def plot_cost_efficiency():
 
 if __name__ == "__main__":
     plot_step_ful_curves() 
-    # plot_cost_efficiency()
+    plot_cost_efficiency()

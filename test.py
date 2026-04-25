@@ -24,9 +24,9 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [1, 100, 200, 300, 400]
-NUM_EPISODES = 5
-T_MAX = CONST_PARAM.t_max
+USER_NUMBERS = [100, 200, 300]
+NUM_EPISODES = 3
+T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")

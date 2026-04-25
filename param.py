@@ -9,11 +9,11 @@ TEST2_ = Const_Param(alt=540.0, inc=53.2, p=6, s=10, f=17, t_max=90, target_k=60
 TEST3_ = Const_Param(alt=540.0, inc=53.2, p=3, s=10, f=17, t_max=90, target_k=30) # MAPPO failed 200 iter
 TEST4_ = Const_Param(alt=540.0, inc=53.2, p=6, s=10, f=17, t_max=90, target_k=30) # p = 13, s = 10
 
-MY_CONST_NAME = "test4"
-IS_MYOTIC = True
+MY_CONST_NAME = "test"
+IS_MYOTIC = False
 N_TRAIN_ITER = 300
 N_USER = 100
-TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
+TEST_MODES = ["ERNC", "STATIC_R"] # "MAPPO" , "MYOTIC"
 # TEST_MODES = ["ERNC" , "STATIC_R", "GREEDY"] # "ERNC" , "STATIC_R", "GREEDY"
 IS_TEST_MODE = True # extra test mode for env
 
