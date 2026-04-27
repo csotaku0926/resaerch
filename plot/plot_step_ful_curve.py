@@ -9,7 +9,7 @@ from param import *
 # 1. 定義你要比較的算法與對應的 CSV 檔名
 # 你可以自行把其他 baseline 的 csv 檔名加進來
 DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
-USER_NUM = 400
+USER_NUM = PLOT_USER_NUM
 
 files_info = {
     "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "MAPPO-CTDE (Proposed)"},
@@ -86,6 +86,9 @@ def plot_step_ful_curves():
 def plot_cost_efficiency():
     plt.figure(figsize=(10, 6))
 
+    # 追蹤全局最大的 Tx Cost 以便設定 X 軸範圍
+    max_tx_all = 0
+
     # 統一使用最上方的 files_info 和 DIR_NAME
     for algo, info in files_info.items():
         file_path = os.path.join(DIR_NAME, info["file"])
@@ -93,19 +96,39 @@ def plot_cost_efficiency():
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
             
-            # X軸是累積流量 (tx_cost)，Y軸是任務完成率 (fulfill)
-            # Matplotlib 會自動把 tx_cost 當作連續刻度，完美對齊
-            plt.plot(df["tx_cost"], df["fulfill"], 
-                     color=info["color"], label=info["label"], linewidth=2.5)
+# --- 關鍵修改邏輯：歸一化 ---
+            # 1. 取得該演算法能達到的最大完成率
+            max_f = df["fulfill"].max()
+            
+            if max_f > 0:
+                # 2. 按比例縮放：將當前進度除以最大進度，再轉換為百分比
+                # 這樣每個演算法的最終點都會是 (Final Tx, 100)
+                fulfill_norm = (df["fulfill"] / max_f) * 100
+            else:
+                fulfill_norm = df["fulfill"] * 0
+            
+            # 更新全局最大 Tx
+            max_tx_all = max(max_tx_all, df["tx_cost"].max())
+
+            # 3. 繪圖：標籤中特別註明原始的最終完成率，以區分「進度高低不同」
+            plt.plot(df["tx_cost"], fulfill_norm, 
+                     color=info["color"], 
+                     label=f"{info['label']}", 
+                     linewidth=2.5)
+            
+            # 在終點畫一個點強調
+            plt.scatter(df["tx_cost"].iloc[-1], fulfill_norm.iloc[-1], 
+                        color=info["color"], s=50, zorder=5)
         else:
             print(f"[Cost Efficiency] 找不到檔案: {file_path}")
 
-    plt.title('Cost Efficiency: Fulfill Rate vs. Accumulated Tx Cost', fontsize=14, fontweight='bold')
+    # plt.title('Cost Efficiency: Fulfill Rate vs. Accumulated Tx Cost', fontsize=14, fontweight='bold')
     plt.xlabel('Accumulated Transmission Cost (packets)', fontsize=12)
-    plt.ylabel('User Fulfill Rate', fontsize=12)
+    plt.ylabel('Task Completion Rate (%)', fontsize=12)
     
     # 讓 Y 軸的顯示範圍稍微留空，畫面更好看
-    plt.ylim(0, 1.05)
+    plt.ylim(0, 105)
+    plt.xlim(0, max_tx_all * 1.05) # 留一點右側空間
     
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend(fontsize=12, loc='lower right')

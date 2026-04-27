@@ -15,7 +15,8 @@ Telesat:
 OneWeb:
 """
 class Const_Param:
-    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30):
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30, 
+                 grid_scale=10, n_neighbor=1):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
@@ -25,12 +26,14 @@ class Const_Param:
         self.target_k = target_k
         self.dl_cp = dl_cp
         self.max_buf = max_buf
+        self.grid_scale = grid_scale
+        self.n_neighbor = n_neighbor
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10,
-                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6,
+                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=10.0,
                  step_seconds=10, t_max=90, target_k=20, test_mode=False):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
@@ -46,7 +49,7 @@ class Constellation:
         self.meo_id = 9999
 
         self.n_grids = n_grids
-        self.grid_scale = 10.0
+        self.grid_scale = grid_scale
         self.min_angle_limit = 30.0
 
         self.agents = []
@@ -313,7 +316,6 @@ class Constellation:
                 target_grid_coords.append([grid_lat, grid_lon])
 
         # --- 第 2 階段：真正初始化用戶 ---
-        # 確定了涵蓋範圍後，才開始建立物件 (絕對不會重複生成！)
         self.user_grids = []
         grid_id_counter = 0
         user_id_counter = 0
@@ -358,7 +360,7 @@ class Constellation:
         left = ((p + 1) % self.p) * self.s + s
         right = ((p - 1) % self.p) * self.s + s
         
-        return [forward, backward, left, right]
+        return [forward, left, backward, right]
 
     def is_leo_visible_to_meo(self, t, ISL_max_range=10000):
         """get visible LEO to MEO source"""

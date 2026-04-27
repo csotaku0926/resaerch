@@ -9,7 +9,7 @@ from param import *
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, const_param: Const_Param, num_neighbors=1, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
+    def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False):
         super().__init__()
 
@@ -17,7 +17,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.e = 0.2         # reliability constraint: Pr(T > T_max) <= e
         self.T_max = T_max         # max time step (truncation)
         
-        self.M = num_neighbors  # 鄰居數量 (Intra-tier)
+        self.M = const_param.n_neighbor  # 鄰居數量 (Intra-tier)
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)
         self.Tw = 2             # time window for contact volume
 
@@ -27,13 +27,16 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         
         if (is_myotic): self.Tw = 1
 
+        self.grid_scale = const_param.grid_scale
+
         self.constellation = Constellation(
             param=const_param, 
             t_max=T_max, 
             num_users=num_users, 
             target_k=target_k, 
             step_seconds=step_seconds,
-            test_mode=test_mode
+            test_mode=test_mode,
+            grid_scale=self.grid_scale
         )
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
@@ -182,7 +185,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             # 【補救核心】：現場重新計算 Action Mask，並強制攔截無效動作
             action_mask = np.zeros(self.M + 1, dtype=np.float32)
             
-            for j, agent_j in enumerate([self.constellation.get_neighbors(i)[0]]):
+            for j, agent_j in enumerate(self.constellation.get_neighbors(i)[:self.M]):
                 if self.constellation.get_ISL_capacity(i, agent_j, current_time) > 0:
                     teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
                     if np.sum(teg_j) > 0:  
@@ -214,7 +217,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
             
 
-            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count * 0.02, 1.0)
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count // 10, 1.0)
             else: self.episode_tx_cost += actual_flow
 
             # time cost
@@ -321,7 +324,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         norm_buf = np.clip(buf / max_buf, 0.0, 1.0)
         bufs = [norm_buf]
 
-        for j in [self.constellation.get_neighbors(agent_id)[0]]:
+        for j in self.constellation.get_neighbors(agent_id)[:self.M]:
             buf_j = self.constellation.get_leo_buffer(j)
             norm_buf_j = np.clip(buf_j / max_buf, 0.0, 1.0)
             bufs.append(norm_buf_j)
@@ -337,7 +340,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         cv_matrix[0, :] = my_teg
         
         # 填入鄰居的 TEG
-        for idx, j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
+        for idx, j in enumerate(self.constellation.get_neighbors(agent_id)[:self.M]):
             # grids_j = self.constellation.get_visible_grids(j, current_time)
             teg_j = self.constellation.get_teg_downlink_volume(j, self.Tw, current_time)
             cv_matrix[idx + 1, :] = teg_j
@@ -349,7 +352,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         #     print(cv_matrix)
         
         # 1. 檢查鄰居 (ISL) 是否活著
-        for j, agent_j in enumerate([self.constellation.get_neighbors(agent_id)[0]]):
+        for j, agent_j in enumerate(self.constellation.get_neighbors(agent_id)[:self.M]):
             if self.constellation.get_ISL_capacity(agent_id, agent_j, current_time) > 0:
                 teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
                 if np.sum(teg_j) > 0:  

@@ -11,6 +11,7 @@ from param import *
 CONST_ = CONST_PARAM
 TMAX = CONST_.t_max
 TARGET_K = CONST_.target_k
+N_NEIGHBOR = 2
 
 def check_roi_coverage(T_max=100, step_second=10):
     print("初始化星系與網格 (這會花幾秒鐘)...")
@@ -42,17 +43,17 @@ def check_roi_coverage(T_max=100, step_second=10):
                 visible_found = True
 
                 
-def run_diagnostic(step_second=10, is_all_in=True, do_log=False):
+def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=N_USER, step_seconds=step_second, test_mode=True)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=n_user, step_seconds=step_second, test_mode=True)
     obs, info = env.reset()
     
     # 獲取初始參數
     T_max = env.T_max
     n_agents = len(env.possible_agents)
-    total_grids = env.constellation.n_grids
+    total_grids = len(env.constellation.user_grids)
     
     # 取得當前總需求 (以所有網格的 K 總和為準)
     # 假設 get_user_fulfill_percent 是根據完成度比例
@@ -66,6 +67,7 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False):
     print(f"[參數確認]")
     print(f"- 衛星數量: {n_agents}")
     print(f"- 網格數量: {total_grids}")
+    print(f"- user number: {n_user}")
     print(f"- 最大步數 (T_max): {T_max}")
     print(f"- action is all ones: {is_all_in}")
     print("-" * 30)
@@ -100,10 +102,13 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False):
         
 
         if is_all_in:
-            actions = {agent: np.ones(env.action_spaces[agent].shape, dtype=np.float32)
+            actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32)
                         for agent in env.agents}
+            for agent in env.agents: actions[agent][N_NEIGHBOR] = 1.0
+
         else:
-            actions = {agent: np.array([0.1, 0.9], dtype=np.float32)
+            arr = [0.1] * N_NEIGHBOR + [1.0 - 0.1 * N_NEIGHBOR]
+            actions = {agent: np.array(arr, dtype=np.float32)
                         for agent in env.agents}
 
         # example toy strategy perform better than "baseline"
@@ -181,8 +186,9 @@ def reset_test():
     print([u.lat for u in env.constellation.user_grids[0].users])
 
 def main():
-    run_diagnostic(is_all_in=True)
-    run_diagnostic(is_all_in=False)
+    for n_user in [40]:
+        run_diagnostic(is_all_in=True, n_user=n_user)
+        run_diagnostic(is_all_in=False, n_user=n_user)
    
 
 if __name__ == '__main__':

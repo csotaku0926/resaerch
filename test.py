@@ -24,13 +24,14 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [100, 200, 300]
-NUM_EPISODES = 3
-T_MAX = 300 #CONST_PARAM.t_max
+USER_NUMBERS = [1, 40, 80, 120, 160]
+NUM_EPISODES = 5
+T_MAX = 50 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
 print(f"- target K: {TARGET_K}")
+print(f"test mode list: {TEST_MODES}")
 print("-" * 30)
 # ─────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ def action_greedy_rlnc(real_id, actual_env, current_time):
     cvs = np.zeros(M + 1, dtype=np.float32)
 
     # ISL links：用鄰居的 downlink TEG 代表「透過這條 ISL 最終能到地面的量」
-    for idx, neighbor_id in enumerate([constellation.get_neighbors(real_id)[0]]):
+    for idx, neighbor_id in enumerate(constellation.get_neighbors(real_id)[:M]):
         if constellation.get_ISL_capacity(real_id, neighbor_id, current_time) > 0:
             teg = constellation.get_teg_downlink_volume(neighbor_id, Tw, current_time)
             cvs[idx] = float(np.sum(teg))
@@ -161,7 +162,7 @@ def compute_static_plan(actual_env):
 
         for sat_id in range(n_sats):
             # ISL：鄰居在這個時刻是否有 capacity
-            for idx, neighbor_id in enumerate([constellation.get_neighbors(sat_id)[0]]):
+            for idx, neighbor_id in enumerate(constellation.get_neighbors(sat_id)[:M]):
                 cap = constellation.get_ISL_capacity(sat_id, neighbor_id, t)
                 if cap > 0:
                     contact_counts[sat_id][idx] += cap   # 用 capacity 加權，而非只計次數
@@ -230,7 +231,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
         # B3：離線計算固定分配計畫，整個 n_users 設定共用一個值
         static_plan = None
         if mode == "STATIC_R":
-            env.reset()
+            # env.reset()
             actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
             print("  計算 Static Plan（離線步驟）...")
             static_plan = compute_static_plan(actual_env)
@@ -238,6 +239,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
         tx_costs      = []
         comp_times    = []
         fulfill_rates = []
+        final_curve = []
 
         for ep in range(num_episodes):
             obs, _ = env.reset()
@@ -245,6 +247,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             done          = False
             final_tx_cost = 0.0
             current_ep_curve = []
+
+            # print([u.pos for u in actual_env.constellation.user_grids[0].users])
 
             while not done:
                 current_time = current_skyfield_time(actual_env)
@@ -292,10 +296,12 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                 
             # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
 
-            if write_curve and ep == num_episodes-1: 
-                for step, tx, ful in current_ep_curve: # 這裡簡單取最後一個 ep 當代表即可
-                    curve_csv_writer.writerow([step, tx, ful])
-                    curve_csv_file.flush()
+            if write_curve and (len(final_curve) == 0 or (
+                ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) < len(final_curve)
+            ) or (
+                not ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) > len(final_curve)
+            )): 
+                final_curve = current_ep_curve
 
             fulfill = actual_env.constellation.get_user_fulfill_percent()
             tx_costs.append(final_tx_cost)
@@ -315,7 +321,12 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time])
             csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
 
-        if write_curve: curve_csv_file.close()
+
+        if write_curve: 
+            for step, tx, ful in final_curve: 
+                curve_csv_writer.writerow([step, tx, ful])
+                curve_csv_file.flush()
+            curve_csv_file.close()
 
     if write_log: csv_file.close()
 
