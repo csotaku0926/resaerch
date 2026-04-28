@@ -28,11 +28,12 @@ class Const_Param:
         self.max_buf = max_buf
         self.grid_scale = grid_scale
         self.n_neighbor = n_neighbor
+        # self.erasure_rate = erasure_rate
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
-                 n_grids=10, num_users=10,
+                 n_grids=10, num_users=10, erasure=0.1,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=10.0,
                  step_seconds=10, t_max=90, target_k=20, test_mode=False):
         # --- 1. Starlink Shell 2 官方參數 ---
@@ -51,6 +52,7 @@ class Constellation:
         self.n_grids = n_grids
         self.grid_scale = grid_scale
         self.min_angle_limit = 30.0
+        self.erasure_rate = erasure
 
         self.agents = []
         self.user_grids = []
@@ -530,14 +532,15 @@ class Constellation:
         # 這裡沒有武斷的 step，只有平滑的機率轉換
         # =============================================================
         # 假設 SNR_THRESHOLD 是 5.0 dB (低於這個值，掉包率開始急劇上升)
-        SNR_THRESHOLD = 10.0
+        SNR_THRESHOLD = 12.0
         
         # 將 SNR 的差距轉換為 Erasure Rate (範圍 0~1)
         # 使用 sigmoid 函數： 1 / (1 + exp(k * (x - x0)))
         # k 是曲線的陡峭程度，這模擬了 FEC 的瀑布效應
         steepness = 1.5 
-        erasure_rate = 1.0 / (1.0 + np.exp(steepness * (snr_db - SNR_THRESHOLD)))
+        erasure_rate =  10.0 * self.erasure_rate / (1.0 + np.exp(steepness * (snr_db - SNR_THRESHOLD)))
         final_erasure = np.clip(erasure_rate, 0.0, 1.0)
+        # print("elev:", elevation_deg, "era:", final_erasure)
         if do_log: print("elev:", elevation_deg, "era:", final_erasure)
 
         # ==========================================
@@ -552,8 +555,10 @@ class Constellation:
         
         # 為了強迫 AI 使用 ISL 協作，我們讓這場風暴「只襲擊偶數號衛星」，奇數號天氣晴朗
         if in_weather_event and (agent_id % 2 == 0):
+            # print(f"{distance}: 0.99")
             return 0.99  # 突發 99% 掉包率 (通道幾乎全毀)
         
+        # print(f"{elevation_deg} dist: {final_erasure}")
         return float(final_erasure)
 
     def download_to_grid(self, agent_id:int, amount, current_time):

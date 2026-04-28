@@ -9,7 +9,7 @@ from param import *
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20,
+    def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False):
         super().__init__()
 
@@ -36,7 +36,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             target_k=target_k, 
             step_seconds=step_seconds,
             test_mode=test_mode,
-            grid_scale=self.grid_scale
+            grid_scale=self.grid_scale,
+            erasure=erasure
         )
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w

@@ -17,6 +17,9 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
 # 請確認這裡的 USER_NUMBERS 跟你跑 test.py 時的設定一致
 USER_NUMBERS = [1, 100, 200, 300, 400] 
+if MY_CONST_NAME == "test_dense":
+    USER_NUMBERS = [1, 40, 80, 120, 160]
+
 X_COLUMN = 'User_Num'
 
 # 【統一管理區】在這裡設定演算法名稱、檔案前綴與繪圖樣式
@@ -116,8 +119,8 @@ def plot_efficiency_vs_users():
         #     y_efficiency[0] = 0.9 * 0.06 + 0.1 * y_efficiency[0]
         # if algo_label == "Proposed MARL (Ours)":
         #     y_efficiency[-1] = y_efficiency[-2]
-        if algo_label == "Myopic MARL":
-            y_efficiency[2] = 0.025
+        # if algo_label == "Myopic MARL":
+        #     y_efficiency[2] = 0.025
 
         if x_users:
             plt.plot(

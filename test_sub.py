@@ -11,7 +11,7 @@ from param import *
 CONST_ = CONST_PARAM
 TMAX = CONST_.t_max
 TARGET_K = CONST_.target_k
-N_NEIGHBOR = 2
+N_NEIGHBOR = CONST_.n_neighbor
 
 def check_roi_coverage(T_max=100, step_second=10):
     print("初始化星系與網格 (這會花幾秒鐘)...")
