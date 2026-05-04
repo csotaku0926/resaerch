@@ -190,8 +190,8 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
         self.lambda_weight = LAMBDA_W  
-        self.target_e = 0.2       # 超時率必須 <= 20%
-        self.lr_lambda = 1e-4      
+        self.target_e = 0.1       # 超時率必須 <= 20%
+        self.lr_lambda = 0.01 #1e-4      
         self.T_max = T_MAX
         self.max_lambda = 2.0
 

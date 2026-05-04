@@ -172,34 +172,59 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         for agent_name in self.agents:
             i = self.constellation.get_id_by_name(agent_name)
-            # 神經網路輸出的比例 (0~1)
-            raw_action = actions[agent_name] # {"LEO_i": action}
-            action_sum = np.sum(raw_action)
-            if action_sum > 1.0:    action_probs = raw_action / action_sum
-            else:                   action_probs = raw_action
+            raw_action = actions[agent_name]
 
-            # --- 套用物理拘束 (Contact Volume) ---
-            # Intra-tier (給鄰居)
-            acc_cost = 0.0
-            acc_max_cost = 0.0
-
-            # 【補救核心】：現場重新計算 Action Mask，並強制攔截無效動作
+            # ==================================================
+            # 【關鍵修正】：1. 先看清環境，計算出哪幾條路徑活著 (Action Mask)
+            # ==================================================
             action_mask = np.zeros(self.M + 1, dtype=np.float32)
-            
             for j, agent_j in enumerate(self.constellation.get_neighbors(i)[:self.M]):
                 if self.constellation.get_ISL_capacity(i, agent_j, current_time) > 0:
                     teg_j = self.constellation.get_teg_downlink_volume(agent_j, self.Tw, current_time)
                     if np.sum(teg_j) > 0:  
                         action_mask[j] = 1.0
-                
+                        
+            if len(self.constellation.get_visible_grids(i, current_time)) > 0:
+                if self.constellation.get_downlink_capacity() > 0:
+                    action_mask[self.M] = 1.0
+
+            # ==================================================
+            # 【關鍵修正】：2. 把想射向死路的意圖「歸零」，保留活路的意圖
+            # ==================================================
+            masked_action = raw_action * action_mask
+            
+            # ==================================================
+            # 【關鍵修正】：3. 針對「活著的路徑」進行正規化，確保火力集中！
+            # ==================================================
+            action_sum = np.sum(masked_action)
+            # 只有當 AI 的總火力超過 1.0 (超出物理極限) 時才等比例壓縮
+            # 如果 AI 想省電 (sum <= 1.0)，就尊重它的決定
+            if action_sum > 1.0:    
+                action_probs = masked_action / action_sum
+            else:                   
+                action_probs = masked_action
+
+            # --- 套用物理拘束 (Contact Volume) ---
+            acc_cost = 0.0
+            acc_max_cost = 0.0
+            max_buf = self.constellation.get_leo_max_buffer()
+
+            # Intra-tier (給鄰居)
+            for j, agent_j in enumerate(self.constellation.get_neighbors(i)[:self.M]):
                 contact_capacity = self.constellation.get_ISL_capacity(i, agent_j, current_time)
                 buf_i = self.constellation.get_leo_buffer(i)
-                actual_flow = min(buf_i, action_probs[j] * contact_capacity * action_mask[j])
+                # 這裡不需要再乘 mask 了，因為前面的 action_probs 已經處理過
+                actual_flow = min(buf_i, action_probs[j] * contact_capacity)
                 self.constellation.transfer_buffer(sat_id=i, neighbor=agent_j, amount=actual_flow)
-                # count in "actual_flow"
+                
                 acc_cost += actual_flow * self.ISL_cost_factor
                 acc_max_cost += max_buf
                 self.episode_tx_cost += actual_flow * self.ISL_cost_factor
+
+            # Inter-tier (給地面)
+            contact_capacity = self.constellation.get_downlink_capacity()
+            buf_i = self.constellation.get_leo_buffer(i)
+            actual_flow = min(buf_i, action_probs[self.M] * contact_capacity)
 
             # Inter-tier (給地面)
             contact_capacity = self.constellation.get_downlink_capacity()

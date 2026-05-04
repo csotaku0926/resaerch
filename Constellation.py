@@ -448,18 +448,21 @@ class Constellation:
         meo_total_packets = 0.1 * self.step_seconds #(self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
 
         # 2. 掃描所有的 LEO (Agents)
+        all_dists = []
+        meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
         for i, agent in enumerate(self.agents):
-            # leo_sat = agent.skyfield_sat # 取得 Skyfield 物件
-            # meo_sat = self.meo_sat.skyfield_sat # 你的 MEO Skyfield 物件
+            leo_sat = agent.skyfield_sat # 取得 Skyfield 物件
             
             # 3. 檢查視距 (Line of Sight) 與仰角
             # 計算 MEO 看 LEO 的相對位置
-            # difference = leo_sat - meo_sat
-            # distance_km = difference.at(current_time).distance().km
+            difference = leo_sat - meo_sat
+            distance_km = difference.at(current_time).distance().km
+            all_dists.append(distance_km)
             # if distance_km < max_dist:
 
-            # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
+            # # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
             self.transfer_buffer(neighbor=i, amount=meo_total_packets)
+
 
     def get_visible_grids(self, agent_id, current_time) -> list[int]:
         sat = self.agents[agent_id].skyfield_sat
