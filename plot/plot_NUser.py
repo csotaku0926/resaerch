@@ -17,13 +17,17 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
 # 【修改 1】：建立映射對照表
 # 將 CSV 裡寫錯的數字，對應到畫圖時該顯示的真實數字
-CSV_WRONG_NUMBERS = [1, 100, 200, 300, 400] 
+# if MY_CONST_NAME == "test_dense":
+#     CSV_WRONG_NUMBERS = [1, 100, 200, 300, 400] 
+#     TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
+# # 若是在測試密集模式下，維持正確的數值
+# elif MY_CONST_NAME == "test_deficit_w4":
+#     CSV_WRONG_NUMBERS = [100, 200, 300, 400]
+#     TRUE_USER_NUMBERS = [100, 200, 300, 400]
+# else:
+CSV_WRONG_NUMBERS = [1, 40, 80, 120, 160]
 TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 
-# 若是在測試密集模式下，維持正確的數值
-if MY_CONST_NAME == "test_dense":
-    CSV_WRONG_NUMBERS = [1, 40, 80, 120, 160]
-    TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 
 # 建立字典：{1: 1, 100: 40, 200: 80, ...}
 NUM_MAPPING = dict(zip(CSV_WRONG_NUMBERS, TRUE_USER_NUMBERS))
@@ -31,10 +35,10 @@ NUM_MAPPING = dict(zip(CSV_WRONG_NUMBERS, TRUE_USER_NUMBERS))
 X_COLUMN = 'User_Num'
 
 ALGO_CONFIG = {
-    'Proposed MARL (Ours)': {
+    'Proposed': {
         'prefix': 'MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'
     },
-    'Myopic MARL': {
+    'Myopic': {
         'prefix': 'MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
     },
     'ERNC': {
@@ -47,6 +51,21 @@ ALGO_CONFIG = {
         'prefix': 'STATIC_R', 'color': 'green', 'marker': 's', 'linestyle': '-.'
     }
 }
+
+# ALGO_CONFIG = {
+#     'Proposed': {
+#         'prefix': 'satellite_test_deficit_checkpoints/MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'
+#     },
+#     'Myopic': {
+#         'prefix': 'satellite_test_deficit_checkpoints/MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
+#     },
+#     'Tw = 3': {
+#         'prefix': 'satellite_test_deficit_w3_checkpoints/MAPPO', 'color': 'orange', 'marker': '^', 'linestyle': ':'
+#     },
+#     'Tw = 4': {
+#         'prefix': 'satellite_test_deficit_w4_checkpoints/MAPPO', 'color': 'gray', 'marker': 'x', 'linestyle': '--'
+#     }
+# }
 
 # ==========================================
 # 2. 繪製來自 test_log.csv 的指標 (Tx Cost, Comp Time)
@@ -62,18 +81,27 @@ def plot_test_log_metrics():
         
         for algo_label, config in ALGO_CONFIG.items():
             file_path = os.path.join(DIR_NAME, f"{config['prefix']}_test_log.csv")
+            # file_path = os.path.join(f"{config['prefix']}_test_log.csv")
             if os.path.exists(file_path):
                 df = pd.read_csv(file_path)
                 if metric in df.columns and X_COLUMN in df.columns:
                     # 【修改 2】：利用 .map() 將 DataFrame 讀出來的錯誤數值轉換成正確的
                     correct_x_values = df[X_COLUMN].map(NUM_MAPPING)
                     
-                    plt.plot(
-                        correct_x_values, df[metric], 
-                        label=algo_label, 
-                        color=config['color'], marker=config['marker'], 
-                        linestyle=config['linestyle'], linewidth=2.5, markersize=8
-                    )
+                    if metric == 'Tx_Cost':
+                        plt.plot(
+                            correct_x_values, df[metric] / df["Fulfill"],  
+                            label=algo_label, 
+                            color=config['color'], marker=config['marker'], 
+                            linestyle=config['linestyle'], linewidth=2.5, markersize=8
+                        )
+                    else:
+                        plt.plot(
+                            correct_x_values, df[metric], 
+                            label=algo_label, 
+                            color=config['color'], marker=config['marker'], 
+                            linestyle=config['linestyle'], linewidth=2.5, markersize=8
+                        )
             else:
                 pass 
 

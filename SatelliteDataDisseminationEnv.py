@@ -10,7 +10,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
     def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
-                 is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False):
+                 is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False, use_deficit=False,
+                 omega_t=0.5, omega_c=0.5):
         super().__init__()
 
         # 1. 定義 param
@@ -24,6 +25,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.target_k = target_k
         self.step_seconds = step_seconds
         self.is_unicast = is_unicast
+
+        # pareto frontier param
+        self.omega_t = omega_t
+        self.omega_c = omega_c
         
         if (is_myotic): self.Tw = 1
 
@@ -42,13 +47,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
 
-        self.PROGRESS_SCALE = 1.0
-        self.COST_SCALE = 0.0
-
-        # 【新增這行】預設關閉，當設為 True 時變身為 B1 基準算法
-        self.is_ORNC_baseline = is_ORNC
-        self.is_ERNC_baseline = is_ERNC
-        self.is_myotic_baseline = is_myotic
+        self.PROGRESS_SCALE = omega_t #1.0
+        self.COST_SCALE = omega_c
 
         # 加入這兩行 (PettingZoo 鐵規則)
         self.possible_agents = [agent.name for agent in self.constellation.agents] #self.constellation.agents[:]
@@ -101,7 +101,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.start_dt = datetime(2026, 4, 1, 0, 0, 0)
         self.reward_factor = 1.0 # scale down reward
         self.reward_factor_time = 1e5
-        self.ISL_cost_factor = 0.2
+        self.ISL_cost_factor = 0.9
 
         # 通訊參數
         self.broadcast_rate_bps = 30e6 * 1.0 
@@ -162,9 +162,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         rewards = {a: 0.0 for a in self.agents}
         sent_user_count = 0
 
+        if (self.current_step == 1):
+            print(actions)
+
         ft = self.constellation.get_finish_time_cost()
         max_buf = self.constellation.get_leo_max_buffer()
-        old_ful = self.constellation.get_user_fulfill_percent()
+        # old_ful = self.constellation.get_user_received_percent()
 
         all_done = bool(self.check_all_grids_fulfilled())
         is_truncated = bool(self.current_step >= self.T_max - 1)
@@ -239,23 +242,27 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
 
             # record progress as reward
-            
+            old_ful = self.constellation.get_user_received_percent()
             sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
-            
+            new_ful = self.constellation.get_user_received_percent()
+            delta_fulfill = new_ful - old_ful
+            rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
+            for neighbor_id in self.constellation.get_rev_neighbors(i):
+                _nei_name = self.constellation.get_name_by_id(neighbor_id)
+                rewards[_nei_name] += self.PROGRESS_SCALE * delta_fulfill
 
-            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count // 10, 1.0)
+            if (self.is_unicast): self.episode_tx_cost += actual_flow * max(sent_user_count, 1.0)
             else: self.episode_tx_cost += actual_flow
 
             # time cost
-            rewards[agent_name] -= 1 / self.T_max #self.reward_factor_time
-            rewards[agent_name] -= self.COST_SCALE * (acc_cost / acc_max_cost)
+            rewards[agent_name] -= self.omega_t * 1  #self.reward_factor_time
+            rewards[agent_name] -= self.omega_c * (acc_cost / acc_max_cost)
 
         # caclulate progress
-
-        new_ful = self.constellation.get_user_fulfill_percent()
-        delta_fulfill = new_ful - old_ful
-        for agent_name in self.agents:
-            rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
+        # new_ful = self.constellation.get_user_received_percent()
+        # delta_fulfill = new_ful - old_ful
+        # # for agent_name in self.agents:
+        #     rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
         
         # 4. 判斷是否結束 (所有目標網格的 DoF 都達到 K)
         # update finish time
@@ -268,7 +275,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         if is_done:
             for agent_name in self.agents:
                 rewards[agent_name] -= self.current_lambda * cost
-                # rewards[agent_name] -= self.COST_SCALE * (self.tx_cost_avg[agent_name] / self.T_max)
+        #         rewards[agent_name] -= self.COST_SCALE * (self.tx_cost_avg[agent_name])
         
         # 5. 更新狀態
         self.current_step += 1
@@ -399,4 +406,3 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         total_recv_percent = self.constellation.get_user_fulfill_percent()
         target = float(1 - self.e) # constraint
         return (total_recv_percent >= target)
-

@@ -1,0 +1,56 @@
+
+[MAPPO] ══ erasure=0.1 ══ n_users=1 ══
+  ep 01: tx=1447.3, time=30.7 fulfill=80.0%
+avg ISL ratio: 0.03568354249000549
+avg DL ratio: 0.05358268320560455
+  ep 02: tx=1310.4, time=28.9 fulfill=80.0%
+avg ISL ratio: 0.0366525761783123
+avg DL ratio: 0.053457554429769516
+  ep 03: tx=1372.6, time=30.0 fulfill=90.0%
+avg ISL ratio: 0.037464894354343414
+avg DL ratio: 0.053753629326820374
+  → avg tx_cost=1376.77, fulfill=83.3%
+[MAPPO] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=2124.0, time=34.775 fulfill=85.0%
+avg ISL ratio: 0.03538136929273605
+avg DL ratio: 0.06351809203624725
+  ep 02: tx=2604.5, time=39.9 fulfill=80.0%
+avg ISL ratio: 0.033130183815956116
+avg DL ratio: 0.06092167645692825
+  ep 03: tx=2278.7, time=34.225 fulfill=82.5%
+avg ISL ratio: 0.03442820906639099
+avg DL ratio: 0.06169154867529869
+  → avg tx_cost=2335.75, fulfill=82.5%
+[MAPPO] ══ erasure=0.1 ══ n_users=80 ══
+  ep 01: tx=1536.9, time=32.1 fulfill=81.2%
+avg ISL ratio: 0.0377308689057827
+avg DL ratio: 0.06146222725510597
+  ep 02: tx=2060.8, time=34.525 fulfill=81.2%
+avg ISL ratio: 0.03639162704348564
+avg DL ratio: 0.061886273324489594
+  ep 03: tx=1624.4, time=36.6125 fulfill=81.2%
+avg ISL ratio: 0.034574031829833984
+avg DL ratio: 0.05929508060216904
+  → avg tx_cost=1740.71, fulfill=81.2%
+[MAPPO] ══ erasure=0.1 ══ n_users=120 ══
+  ep 01: tx=2003.3, time=42.916666666666664 fulfill=80.0%
+avg ISL ratio: 0.025895588099956512
+avg DL ratio: 0.04688404127955437
+  ep 02: tx=2159.0, time=44.3 fulfill=80.8%
+avg ISL ratio: 0.027979496866464615
+avg DL ratio: 0.0511472225189209
+  ep 03: tx=2130.8, time=35.45 fulfill=81.7%
+avg ISL ratio: 0.030568134039640427
+avg DL ratio: 0.05528484284877777
+  → avg tx_cost=2097.67, fulfill=80.8%
+[MAPPO] ══ erasure=0.1 ══ n_users=160 ══
+  ep 01: tx=2218.9, time=45.35625 fulfill=80.0%
+avg ISL ratio: 0.030364323407411575
+avg DL ratio: 0.05576707795262337
+  ep 02: tx=3274.3, time=34.05625 fulfill=83.8%
+avg ISL ratio: 0.03721090778708458
+avg DL ratio: 0.06832174211740494
+  ep 03: tx=2003.7, time=48.5 fulfill=80.0%
+avg ISL ratio: 0.033793672919273376
+avg DL ratio: 0.06116729602217674
+  → avg tx_cost=2498.98, fulfill=81.2%

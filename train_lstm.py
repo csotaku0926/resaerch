@@ -9,6 +9,7 @@ from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
+from ray.rllib.policy.sample_batch import SampleBatch
 
 # 引入你的環境
 from SatelliteDataDisseminationEnv import SatelliteDataDisseminationEnv
@@ -91,9 +92,35 @@ class MAPPO_LSTM_Model(TorchModelV2, nn.Module):
 
         # 特徵融合與決策
         combined_features = torch.cat([local_buf, cv_features, local_action_mask], dim=1)
+
         action_logits = self.actor_mlp(combined_features)
+        # 1. 取得原始的線性預測值
+        # raw_logits = self.actor_mlp(combined_features)
+        
+        # =========================================================
+        # 【腦部手術：資源分配的數學約束】
+        # RLlib 預設會把 logits 切半，前半部當 Mean，後半部當 Log_Std
+        # =========================================================
+        # mean_len = raw_logits.shape[1] // 2
+        # means = raw_logits[:, :mean_len]
+        # log_stds = raw_logits[:, mean_len:]
+        
+        # # 建立一個隱形的「留在肚子裡 (Hold Buffer)」選項，基準分數設為 0
+        # virtual_hold_logit = torch.zeros(means.shape[0], 1, device=means.device)
+        
+        # # 將原本的通道與隱形通道合併，然後做 Softmax 算比例
+        # concat_logits = torch.cat([means, virtual_hold_logit], dim=1)
+        # probs = torch.softmax(concat_logits, dim=1)
+        
+        # # 把隱形通道的比例拿掉，剩下的實體通道比例加總【絕對會 <= 1.0】
+        # bounded_means = probs[:, :-1]
+        
+        # # 把修飾過、符合物理極限的 Mean 跟原來的 Std 重新組合還給 RLlib
+        # action_logits = torch.cat([bounded_means, log_stds], dim=1)
+        # =========================================================
         
         return action_logits, state
+
 
     def value_function(self):
         """Critic 價值評估前向傳播"""
@@ -155,7 +182,24 @@ class MAPPO_CTDE_Model(TorchModelV2, nn.Module):
 
         self._last_global_state = input_dict["obs"]["global_state"]
 
-        action_logits = self.actor(local_features)
+        # 1. 取得原始輸出
+        raw_logits = self.actor(local_features)
+
+        # =========================================================
+        # 【腦部手術：資源分配的數學約束】
+        # =========================================================
+        mean_len = raw_logits.shape[1] // 2
+        means = raw_logits[:, :mean_len]
+        log_stds = raw_logits[:, mean_len:]
+        
+        virtual_hold_logit = torch.zeros(means.shape[0], 1, device=means.device)
+        concat_logits = torch.cat([means, virtual_hold_logit], dim=1)
+        probs = torch.softmax(concat_logits, dim=1)
+        bounded_means = probs[:, :-1]
+        
+        action_logits = torch.cat([bounded_means, log_stds], dim=1)
+        # =========================================================
+
         return action_logits, state
 
     def value_function(self):
@@ -191,9 +235,31 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         super().__init__()
         self.lambda_weight = LAMBDA_W  
         self.target_e = 0.1       # 超時率必須 <= 20%
-        self.lr_lambda = 0.01 #1e-4      
+        self.lr_lambda = 0.001 #1e-4      
         self.T_max = T_MAX
         self.max_lambda = 2.0
+
+    # 【新增】：回合開始時，準備一個空陣列來裝 action
+    def on_episode_start(self, *, worker, base_env, policies, episode, env_index, **kwargs):
+        episode.user_data["action_isl_history"] = []
+        episode.user_data["action_dl_history"] = []
+
+    # 【新增】：每個 Step 直接抓出神經網路輸出的 action
+    def on_postprocess_trajectory(
+        self, *, worker, episode, agent_id, policy_id, policies,
+        postprocessed_batch, original_batches, **kwargs
+    ):
+        if SampleBatch.ACTIONS in postprocessed_batch:
+            actions = postprocessed_batch[SampleBatch.ACTIONS]
+            # actions 的形狀是 (Batch_Size, Action_Dim)
+            if len(actions.shape) == 2 and actions.shape[1] > 1:
+                # 前面 M 個維度是 ISL (取水平加總)，最後 1 個維度是 Downlink
+                isl_sums = np.sum(actions[:, :-1], axis=1)
+                dl_vals = actions[:, -1]
+                
+                # 存入 episode 的紀錄中
+                episode.user_data["action_isl_history"].extend(isl_sums.tolist())
+                episode.user_data["action_dl_history"].extend(dl_vals.tolist())
 
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         last_info = episode.last_info_for(episode.get_agents()[0]) 
@@ -209,6 +275,18 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
         episode.custom_metrics["episode_cost"] = cost
         episode.custom_metrics["completion_time"] = comp_time
         episode.custom_metrics["transmission_cost"] = tx_cost
+
+        # 【新增】：直接在這裡算平均，寫入 metrics
+        isl_hist = episode.user_data.get("action_isl_history", [])
+        dl_hist = episode.user_data.get("action_dl_history", [])
+        
+        if len(isl_hist) > 0:
+            episode.custom_metrics["avg_isl"] = np.mean(isl_hist)
+            episode.custom_metrics["avg_dl"] = np.mean(dl_hist)
+        else:
+            episode.custom_metrics["avg_isl"] = 0.0
+            episode.custom_metrics["avg_dl"] = 0.0
+            
 
     def on_train_result(self, *, algorithm, result, **kwargs):
         env_metrics = result.get("env_runners", {})
@@ -238,10 +316,23 @@ class CMARL_LagrangianCallback(DefaultCallbacks):
 # 3. 主程式：設定與啟動訓練
 # =====================================================================
 
+# def env_creator(args):
+    # env = SatelliteDataDisseminationEnv(
+    #     const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
+    #     erasure=ERASURE, use_deficit=USE_DEFICIT
+    # )
+    # return ParallelPettingZooEnv(env)
+
 def env_creator(args):
+    # 從 kwargs 取出權重，如果沒有就給預設值 0.5
+    omega_t = args.get("omega_t", 0.5)
+    omega_c = args.get("omega_c", 0.5)
+    
     env = SatelliteDataDisseminationEnv(
-        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
-        erasure=ERASURE
+        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, 
+        is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
+        erasure=ERASURE, use_deficit=USE_DEFICIT,
+        omega_t=omega_t, omega_c=omega_c  # 傳給環境
     )
     return ParallelPettingZooEnv(env)
 
@@ -252,7 +343,6 @@ def main():
     print("硬體與 GPU 狀態檢查")
     print("="*40)
     
-    import torch
     cuda_available = torch.cuda.is_available()
     print(f"1. PyTorch CUDA 是否可用: {cuda_available}")
     if cuda_available:
@@ -275,7 +365,8 @@ def main():
         ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
     dummy_env = SatelliteDataDisseminationEnv(
-        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER
+        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
+        use_deficit=USE_DEFICIT
     )
     sample_agent = dummy_env.possible_agents[0]
     obs_space = dummy_env.observation_space(sample_agent)
@@ -361,9 +452,13 @@ def main():
         comp_time_mean = custom_metrics.get("completion_time_mean", 0.0)
         tx_cost_mean = custom_metrics.get("transmission_cost_mean", 0.0)
         lam = result["custom_metrics"].get("lambda_weight", 0.0)
+        # 【新增】：抓取並印出 Action 平均值
+        isl_mean = custom_metrics.get("avg_isl_mean", 0.0)
+        dl_mean = custom_metrics.get("avg_dl_mean", 0.0)
         
         print(f"Iter {i:03d} | 全局 Reward: {reward_mean:.2f} | 超時率(Cost): {cost_mean*100:.1f}% | 懲罰權重(Lambda): {lam:.3f}")
         print(f"完成步數: {comp_time_mean:.1f} | 總流量: {tx_cost_mean:.1f}")
+        print(f"神經網路 Action 輸出平均 -> ISL: {isl_mean:.3f} | Downlink: {dl_mean:.3f}")
 
         csv_writer.writerow([i, reward_mean, cost_mean, lam, tx_cost_mean, comp_time_mean])
         csv_file.flush() 

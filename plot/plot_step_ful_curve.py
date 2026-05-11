@@ -12,11 +12,11 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 USER_NUM = PLOT_USER_NUM
 
 files_info = {
-    "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "MAPPO-CTDE (Proposed)"},
-    "MYOTIC": {"file": f"MYOTIC_{USER_NUM}_curve.csv", "color": "red", "label": "MYOPIC-CTDE"},
+    "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "Proposed"},
+    "MYOTIC": {"file": f"MYOTIC_{USER_NUM}_curve.csv", "color": "red", "label": "Myopic"},
     "GREEDY": {"file": f"GREEDY_{USER_NUM}_curve.csv", "color": "gray", "label": "Greedy"},
-    "ERNC": {"file": f"ERNC_{USER_NUM}_curve.csv", "color": "orange", "label": "ER-NC"},
-    "STATIC": {"file": f"STATIC_R_{USER_NUM}_curve.csv", "color": "green", "label": "Static Redundancy"},
+    "ERNC": {"file": f"ERNC_{USER_NUM}_curve.csv", "color": "orange", "label": "ERNC"},
+    "STATIC": {"file": f"STATIC_R_{USER_NUM}_curve.csv", "color": "green", "label": "Static"},
 }
 
 
@@ -78,7 +78,7 @@ def plot_step_ful_curves():
     plt.legend(loc="lower right", fontsize=12)
 
     plt.tight_layout()
-    fig_name = f'fig/{MY_CONST_NAME}_N{USER_NUM}_all_curves_comparison.png'
+    fig_name = f'fig/{MY_CONST_NAME}_N{USER_NUM}_completion_time_rate.png'
     plt.savefig(fig_name, dpi=300)
     plt.show()
     print(f"已成功儲存 {fig_name}")

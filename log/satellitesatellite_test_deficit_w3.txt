@@ -1,0 +1,58 @@
+  ep 01: tx=9181.9, time=44.7 fulfill=90.0%
+avg ISL ratio: 0.67637837
+avg DL ratio: 0.81830055
+  ep 02: tx=6456.4, time=39.5 fulfill=70.0%
+avg ISL ratio: 0.6655264
+avg DL ratio: 0.8286387
+  ep 03: tx=6376.7, time=67.0 fulfill=70.0%
+avg ISL ratio: 0.6660022
+avg DL ratio: 0.82795316
+  → avg tx_cost=7338.34, fulfill=76.7%
+
+[MAPPO] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=6623.9, time=60.475 fulfill=57.5%
+avg ISL ratio: 0.67254174
+avg DL ratio: 0.8210507
+  ep 02: tx=4645.5, time=66.325 fulfill=40.0%
+avg ISL ratio: 0.6696068
+avg DL ratio: 0.82367027
+  ep 03: tx=6871.9, time=70.25 fulfill=70.0%
+avg ISL ratio: 0.66915
+avg DL ratio: 0.82424116
+  → avg tx_cost=6047.11, fulfill=55.8%
+
+[MAPPO] ══ erasure=0.1 ══ n_users=80 ══
+  ep 01: tx=6784.2, time=61.75 fulfill=72.5%
+avg ISL ratio: 0.6779866
+avg DL ratio: 0.8156562
+  ep 02: tx=9261.4, time=62.6625 fulfill=67.5%
+avg ISL ratio: 0.6802636
+avg DL ratio: 0.8137356
+  ep 03: tx=4862.6, time=53.925 fulfill=72.5%
+avg ISL ratio: 0.6772278
+avg DL ratio: 0.8165012
+  → avg tx_cost=6969.40, fulfill=70.8%
+
+[MAPPO] ══ erasure=0.1 ══ n_users=120 ══
+  ep 01: tx=7068.2, time=57.34166666666667 fulfill=75.0%
+avg ISL ratio: 0.68070924
+avg DL ratio: 0.81314844
+  ep 02: tx=9323.7, time=69.45 fulfill=55.0%
+avg ISL ratio: 0.6843807
+avg DL ratio: 0.8097617
+  ep 03: tx=8051.5, time=60.525 fulfill=54.2%
+avg ISL ratio: 0.6842188
+avg DL ratio: 0.80989873
+  → avg tx_cost=8147.79, fulfill=61.4%
+
+[MAPPO] ══ erasure=0.1 ══ n_users=160 ══
+  ep 01: tx=7063.4, time=60.45625 fulfill=58.1%
+avg ISL ratio: 0.6818816
+avg DL ratio: 0.81181157
+  ep 02: tx=8239.8, time=57.51875 fulfill=62.5%
+avg ISL ratio: 0.6810915
+avg DL ratio: 0.81284165
+  ep 03: tx=5927.7, time=61.3 fulfill=56.2%
+avg ISL ratio: 0.67868835
+avg DL ratio: 0.8150843
+  → avg tx_cost=7076.97, fulfill=59.0%

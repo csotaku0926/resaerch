@@ -16,7 +16,7 @@ OneWeb:
 """
 class Const_Param:
     def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30, 
-                 grid_scale=10, n_neighbor=1):
+                 grid_scale=10, n_neighbor=1, Tw=2):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
@@ -28,13 +28,14 @@ class Const_Param:
         self.max_buf = max_buf
         self.grid_scale = grid_scale
         self.n_neighbor = n_neighbor
+        self.Tw = Tw
         # self.erasure_rate = erasure_rate
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10, erasure=0.1,
-                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=10.0,
+                 packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=5.0,
                  step_seconds=10, t_max=90, target_k=20, test_mode=False):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
@@ -58,6 +59,7 @@ class Constellation:
         self.user_grids = []
         self.name_to_idx = {}
         self.meo_sat = None
+        self.n_neighbor = param.n_neighbor
 
         # --- MEO 參數 ---
         self.meo_alt = meo_alt
@@ -72,7 +74,8 @@ class Constellation:
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
         self.target_k = param.target_k
-        self.users_per_grid = num_users
+        self.num_users = num_users
+        self.users_per_grid = max(num_users // self.n_grids, 1)
         self.max_covered_grid = 10 # assume at most cover 4 grids per time
         self.t_max = param.t_max
 
@@ -85,6 +88,9 @@ class Constellation:
         self.grx_db = 20.0   # 接收天線增益
         self.losses_db = 3.0 # 其他系統與指向損失
         self.noise_dbm = -100.0
+
+        # extra info
+        self.estimated_recv = np.zeros(self.n_grids, dtype=np.float32)
 
         # time scale
         ts = load.timescale()
@@ -296,8 +302,7 @@ class Constellation:
         ts = load.timescale()
         
         # --- 第 1 階段：純掃描 ---
-        # 只記錄衛星在這段時間內會經過的「不重複網格座標」
-        target_grid_coords = []
+        target_grid_coords = set() # 【修正 1】使用 set 來自動去重
         grid_size = self.grid_scale
 
         if do_log: print(f"正在掃描 {len(self.agents)} 顆衛星的模擬軌跡涵蓋範圍...")
@@ -314,20 +319,22 @@ class Constellation:
                 grid_lat = math.floor(lat / grid_size) * grid_size
                 grid_lon = math.floor(lon / grid_size) * grid_size
                 
-                # 把經過的座標丟進 set 裡 (自動去重)
-                target_grid_coords.append([grid_lat, grid_lon])
+                # 【修正 2】必須轉成 tuple 才能放入 set 中
+                target_grid_coords.add((grid_lat, grid_lon))
 
         # --- 第 2 階段：真正初始化用戶 ---
         self.user_grids = []
         grid_id_counter = 0
         user_id_counter = 0
 
-        # random pick K grids
+        # 將去重後的 set 轉回 list 以便 shuffle
         target_grid_coords = list(target_grid_coords)
         np.random.shuffle(target_grid_coords)
-        target_grid_coords = target_grid_coords[:self.n_grids]
+        # 確保不會 out of bounds
+        actual_grids = min(self.n_grids, len(target_grid_coords))
+        target_grid_coords = target_grid_coords[:actual_grids]
 
-        if do_log: print(f"掃描完畢，共有 {len(target_grid_coords)} 個網格落入涵蓋範圍。開始生成用戶...")
+        if do_log: print(f"掃描完畢，共有 {len(target_grid_coords)} 個獨立網格。開始生成用戶...")
 
         for (grid_lat, grid_lon) in target_grid_coords:
             grid = GroundGrid(grid_lat + grid_size // 2, grid_lon + grid_size // 2, grid_id_counter, 
@@ -362,7 +369,20 @@ class Constellation:
         left = ((p + 1) % self.p) * self.s + s
         right = ((p - 1) % self.p) * self.s + s
         
-        return [forward, left, backward, right]
+        neighbors = [forward, left, backward, right]
+        return neighbors[:self.n_neighbor]
+
+    def get_rev_neighbors(self, sat_id):
+        p = sat_id // self.s # plane id
+        s = sat_id % self.s # sat id in plane
+        
+        forward = p * self.s + ((s + 1) % self.s)
+        backward = p * self.s + ((s - 1) % self.s)
+        left = ((p + 1) % self.p) * self.s + s
+        right = ((p - 1) % self.p) * self.s + s
+        
+        neighbors = [backward, right, forward, left]
+        return neighbors[:self.n_neighbor]
 
     def is_leo_visible_to_meo(self, t, ISL_max_range=10000):
         """get visible LEO to MEO source"""
@@ -440,12 +460,7 @@ class Constellation:
         """
         MEO 作為 Source, 將封包廣播給視距內的 LEOs
         """
-        # 1. 定義 MEO 的發射能力 (假設 MEO 的頻寬比較大)
-        # meo_tx_rate_bps = 100e6  # 100 Mbps
-        # packet_size_bits = 80e6  # 10 MB = 80 Mbits (跟你 LEO 的設定一樣)
-        
-        # 算出 MEO 在這 10 秒內，總共噴了多少個封包 (DoF)
-        meo_total_packets = 0.1 * self.step_seconds #(self.meo_tx_rate_bps * self.step_seconds) / self.packet_size_bits
+        meo_total_packets = 0.2 * self.step_seconds
 
         # 2. 掃描所有的 LEO (Agents)
         all_dists = []
@@ -458,7 +473,6 @@ class Constellation:
             difference = leo_sat - meo_sat
             distance_km = difference.at(current_time).distance().km
             all_dists.append(distance_km)
-            # if distance_km < max_dist:
 
             # # 6. 將收到的封包加入 LEO 的 Buffer 裡 (使用我們上一篇討論的 add_buffer)
             self.transfer_buffer(neighbor=i, amount=meo_total_packets)
@@ -480,15 +494,9 @@ class Constellation:
         return visible_grid_idx
     
     def get_downlink_capacity(self):
-        
         # 6. 轉換為封包數 (假設 1 個 NC 封包是 10 MB = 80 Mbits)
         # packet_size_bits = 80e6
-        max_packets = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
-
-        # user amount counts..
-        # user_num = self.users_per_grid
-        # user_factor = max(1.0, user_num / 10.0)
-
+        # max_packets = (self.broadcast_rate_bps * self.step_seconds) / self.packet_size_bits
         return self.dl_cp #int(max_packets)
 
     def calculate_erasure_rate(self, agent_id: int, user: User, current_time, do_log=False):
@@ -547,7 +555,7 @@ class Constellation:
         if do_log: print("elev:", elevation_deg, "era:", final_erasure)
 
         # ==========================================
-        # 🌪️ [關鍵新增] 突發狀況：週期性極端氣候遮蔽 (Deterministic Blockage)
+        # 突發狀況：週期性極端氣候遮蔽 (Deterministic Blockage)
         # ==========================================
         dt = current_time.utc_datetime()
         minute = dt.minute
@@ -555,14 +563,16 @@ class Constellation:
         
         # 陷阱設計：每分鐘的 第 20 秒 到 50 秒，會有一場嚴重的通訊遮蔽
         in_weather_event = (20 <= second <= 50)
-        
-        # 為了強迫 AI 使用 ISL 協作，我們讓這場風暴「只襲擊偶數號衛星」，奇數號天氣晴朗
         if in_weather_event and (agent_id % 2 == 0):
-            # print(f"{distance}: 0.99")
-            return 0.99  # 突發 99% 掉包率 (通道幾乎全毀)
+            return 0.99  
         
-        # print(f"{elevation_deg} dist: {final_erasure}")
         return float(final_erasure)
+
+    # 每次 download_to_grid 之後更新
+    def update_estimated_recv(self, sat_id, grid_id, amount, current_time):
+        for ui, user in enumerate(self.user_grids[grid_id].users):
+            p = self.calculate_erasure_rate(sat_id, user, current_time)
+            self.estimated_recv[grid_id] += amount * (1.0 - p)
 
     def download_to_grid(self, agent_id:int, amount, current_time):
         """
@@ -577,7 +587,6 @@ class Constellation:
         self.agents[agent_id].send(amount)
         # --- 3. 異質化接收發生在這裡！ ---
         for g_idx in grid_is:
-            # if (agent_id == 2): print(self.user_grids[g_idx].users)
             for ui, user in enumerate(self.user_grids[g_idx].users):
    
                 difference = sat - user.pos # wgs84.latlon...
@@ -594,6 +603,9 @@ class Constellation:
                 
                 self.user_grids[g_idx].users[ui].recv(received)
                 usr_count += 1
+            
+            # update expected recv
+            self.update_estimated_recv(agent_id, g_idx, amount, current_time)
         
         return usr_count
 

@@ -23,10 +23,10 @@ X_COLUMN = 'erasure'
 # 【統一管理區】在這裡設定演算法名稱、檔案前綴與繪圖樣式
 # 之後所有的圖都會統一使用這裡的設定，保證風格完全一致
 ALGO_CONFIG = {
-    'Proposed MARL (Ours)': {
+    'Proposed': {
         'prefix': 'MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'
     },
-    'Myopic MARL': {
+    'Myopic': {
         'prefix': 'MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
     },
     'ERNC': {

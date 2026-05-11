@@ -1,0 +1,45 @@
+
+[GREEDY] ══ erasure=0.1 ══ n_users=100 ══
+  ep 01: tx=32737.6, time=85.96 fulfill=20.0%
+avg ISL ratio: 0.17563128471374512
+avg DL ratio: 0.21322591602802277
+  ep 02: tx=32825.2, time=86.05 fulfill=11.0%
+avg ISL ratio: 0.16802144050598145
+avg DL ratio: 0.2141881287097931
+  ep 03: tx=30795.7, time=84.91 fulfill=14.0%
+avg ISL ratio: 0.1626979261636734
+avg DL ratio: 0.21003606915473938
+  → avg tx_cost=32119.50, fulfill=15.0%
+[GREEDY] ══ erasure=0.1 ══ n_users=200 ══
+  ep 01: tx=32247.3, time=81.605 fulfill=31.0%
+avg ISL ratio: 0.15225009620189667
+avg DL ratio: 0.20998479425907135
+  ep 02: tx=31071.2, time=85.715 fulfill=12.5%
+avg ISL ratio: 0.15224964916706085
+avg DL ratio: 0.20708872377872467
+  ep 03: tx=34437.6, time=82.6 fulfill=31.0%
+avg ISL ratio: 0.16199365258216858
+avg DL ratio: 0.21287180483341217
+  → avg tx_cost=32585.37, fulfill=24.8%
+[GREEDY] ══ erasure=0.1 ══ n_users=300 ══
+  ep 01: tx=29456.6, time=85.96333333333334 fulfill=10.3%
+avg ISL ratio: 0.13729624450206757
+avg DL ratio: 0.19382120668888092
+  ep 02: tx=29982.3, time=85.46 fulfill=20.3%
+avg ISL ratio: 0.14302338659763336
+avg DL ratio: 0.19475756585597992
+  ep 03: tx=36829.3, time=81.69 fulfill=26.0%
+avg ISL ratio: 0.152412548661232
+avg DL ratio: 0.21006503701210022
+  → avg tx_cost=32089.41, fulfill=18.9%
+[GREEDY] ══ erasure=0.1 ══ n_users=400 ══
+  ep 01: tx=39351.8, time=84.965 fulfill=20.5%
+avg ISL ratio: 0.19237075746059418
+avg DL ratio: 0.25694864988327026
+  ep 02: tx=39500.4, time=85.7575 fulfill=10.2%
+avg ISL ratio: 0.18747389316558838
+avg DL ratio: 0.25844255089759827
+  ep 03: tx=36760.8, time=83.655 fulfill=22.5%
+avg ISL ratio: 0.18302114307880402
+avg DL ratio: 0.25229594111442566
+  → avg tx_cost=38537.69, fulfill=17.8%

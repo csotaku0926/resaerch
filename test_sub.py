@@ -47,7 +47,7 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=n_user, step_seconds=step_second, test_mode=True)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=n_user, step_seconds=step_second, test_mode=True, use_deficit=USE_DEFICIT)
     obs, info = env.reset()
     
     # 獲取初始參數
@@ -70,6 +70,7 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
     print(f"- user number: {n_user}")
     print(f"- 最大步數 (T_max): {T_max}")
     print(f"- action is all ones: {is_all_in}")
+    print(f"enable deficit: {USE_DEFICIT}")
     print("-" * 30)
 
     # 2. 測試：如果所有衛星「完全躺平」(零動作)
@@ -120,6 +121,7 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
         #     actions = {agent: np.zeros(env.action_spaces[agent].shape, dtype=np.float32)
         #             for agent in env.agents}
         obs, rewards, terms, truncs, infos = env.step(actions)
+        # print("[DEFi]:", obs[TEST_ID]["local_obs"]["buffers"])
         if (do_log): print("[reward]:", rewards[TEST_ID])
         if (do_log): print("[OBS]: ", obs[TEST_ID]["local_obs"])
         # print("[INFO]: ", infos[TEST_ID]["sent_user_count"]) <-- problematic

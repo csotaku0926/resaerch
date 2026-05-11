@@ -24,9 +24,9 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-# USER_NUMBERS = [1, 40, 80, 120, 160] # [1, 40, 80, 120, 160]
+USER_NUMBERS = [1, 40, 80, 120, 160] # [1, 40, 80, 120, 160]
 # ERASURES = [0.2]
-USER_NUMBERS = [1, 40, 80, 120, 160]
+# USER_NUMBERS = [100, 200, 300, 400]
 ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
 NUM_EPISODES = 3
 T_MAX = 90 #CONST_PARAM.t_max
@@ -208,6 +208,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
     avg_comp_times    = []
 
     checkpoint_dir = f"./satellite_{MY_CONST_NAME}_checkpoints"
+    log_txt_file = f"log/satellite_{MY_CONST_NAME}_{mode}.txt"
+    open(log_txt_file, 'w').close() # clear previous logs
+
     if write_log:
         os.makedirs(checkpoint_dir, exist_ok=True)
         log_file_path = os.path.join(checkpoint_dir, f"{mode}_test_log.csv")
@@ -220,6 +223,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
 
         for n_users in user_numbers:
             print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══")
+            with open(log_txt_file, "a") as f:
+                f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══\n")
 
             if write_curve:
                 curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_curve.csv")
@@ -245,7 +250,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             tx_costs      = []
             comp_times    = []
             fulfill_rates = []
-            final_curve = []
+            final_curve   = []
+            isl_ratios = [] # testing
+            dl_ratios = []
 
             for ep in range(num_episodes):
                 obs, _ = env.reset()
@@ -269,12 +276,11 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                                 policy_id="shared_policy",
                                 explore=False)
 
-                            # print(actions[agent_id])
 
                         elif mode == "GREEDY":
                             actions[agent_id] = action_greedy_rlnc(
                                 real_id, actual_env, current_time)
-                            # print(actions[agent_id])
+
 
                         elif mode == "ERNC":
                             actions[agent_id] = action_ernc(
@@ -285,6 +291,13 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                                 real_id, actual_env, current_time, static_plan)
 
                     obs, _, terminations, truncations, infos = env.step(actions)
+                    
+                    # 統計每個 agent 的 action 分布
+                    isl_ratio = np.mean([actions[a][:-1] for a in actions], axis=0)
+                    isl_ratios.append(isl_ratio)
+                    dl_ratio  = np.mean([actions[a][-1]  for a in actions])
+                    dl_ratios.append(dl_ratio)
+                    # print(f"平均 ISL 比例: {isl_ratio}, 平均 DL 比例: {dl_ratio}")
 
                     # 【新增 3】：記錄當下 Step 的完賽率
                     step_val = actual_env.current_step
@@ -314,6 +327,14 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                 fulfill_rates.append(fulfill)
                 print(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time}"
                     f" fulfill={fulfill*100:.1f}%")
+                
+                print("avg ISL ratio:", np.mean(isl_ratios))
+                print("avg DL ratio:", np.mean(dl_ratios))
+
+                with open(log_txt_file, "a") as f:
+                    f.write(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time} fulfill={fulfill*100:.1f}%\n")
+                    f.write(f"avg ISL ratio: {np.mean(isl_ratios)}\n")
+                    f.write(f"avg DL ratio: {np.mean(dl_ratios)}\n")
 
             avg_tx  = float(np.mean(tx_costs))
             avg_ful = float(np.mean(fulfill_rates))
@@ -322,6 +343,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             avg_fulfill_rates.append(avg_ful)
             avg_comp_times.append(avg_time)
             print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+            with open(log_txt_file, "a") as f:
+                f.write(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+                
             if write_log:
                 csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time, era])
                 csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
@@ -376,7 +400,7 @@ def main():
             print("MYOTIC 載入完成")
 
         tx_costs, fulfill_rates, times = run_mode(
-            mode, USER_NUMBERS, NUM_EPISODES, algo=algo)
+            mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG)
 
     ray.shutdown()
 
