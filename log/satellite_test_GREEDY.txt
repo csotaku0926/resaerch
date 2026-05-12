@@ -1,0 +1,12 @@
+
+[GREEDY] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=10289.8, time=50.275 fulfill=67.5%
+avg ISL ratio: 0.1994049847126007
+avg DL ratio: 0.2598542869091034
+  ep 02: tx=11408.1, time=53.225 fulfill=65.0%
+avg ISL ratio: 0.21576499938964844
+avg DL ratio: 0.2897905707359314
+  ep 03: tx=9704.6, time=58.85 fulfill=50.0%
+avg ISL ratio: 0.20850801467895508
+avg DL ratio: 0.27815863490104675
+  → avg tx_cost=10467.51, fulfill=60.8%

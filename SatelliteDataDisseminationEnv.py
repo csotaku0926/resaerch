@@ -11,7 +11,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
     def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False, use_deficit=False,
-                 omega_t=0.5, omega_c=0.5):
+                 omega_t=0.5, omega_c=0.5, enable_ISL=True):
         super().__init__()
 
         # 1. 定義 param
@@ -29,6 +29,9 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # pareto frontier param
         self.omega_t = omega_t
         self.omega_c = omega_c
+
+        # # ablation param
+        # self.enable_ISL = enable_ISL
         
         if (is_myotic): self.Tw = 1
 

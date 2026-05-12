@@ -357,116 +357,137 @@ def main():
         print("   -> ⚠️ 警告: Ray 沒有偵測到任何 GPU！")
     print("="*40 + "\n")
 
-    env_name = "satellite_nc_env"
-    register_env(env_name, env_creator)
-    if not IS_MYOTIC:
-        ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
-    else:
-        ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+    # 建立總表來記錄所有模型最終的表現 (用於畫 Pareto 圖)
+    pareto_results = []
+    
+    for idx, config in enumerate(PARETO_CONFIGS):
+        w_t = config["omega_t"]
+        w_c = config["omega_c"]
+        run_name = f"Run_{idx}_WT{w_t}_WC{w_c}"
+        
+        print("\n" + "="*50)
+        print(f"🚀 開始訓練模型: {run_name}")
+        print("="*50)
+        
+        # 註冊帶有特定權重的環境 (每次迴圈使用不同的名字避免衝突)
+        env_name = f"satellite_nc_env_{run_name}"
+        register_env(env_name, lambda config_args: env_creator({**config_args, **config}))
+        
+        if not IS_MYOTIC:
+            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+        else:
+            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
-    dummy_env = SatelliteDataDisseminationEnv(
-        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
-        use_deficit=USE_DEFICIT
-    )
-    sample_agent = dummy_env.possible_agents[0]
-    obs_space = dummy_env.observation_space(sample_agent)
-    act_space = dummy_env.action_space(sample_agent)
+        # ... (取得 dummy_env 等初始化程式碼照舊) ...
+        dummy_env = env_creator(config)
+        sample_agent = dummy_env.par_env.possible_agents[0]
+        obs_space = dummy_env.observation_space[sample_agent]
+        act_space = dummy_env.action_space[sample_agent]
 
-    n_runner = 2
-    train_batch_size = dummy_env.constellation.t * T_MAX * n_runner
+        n_runner = 2
+        train_batch_size = dummy_env.par_env.constellation.t * T_MAX * n_runner
 
-    policies = {"shared_policy": (None, obs_space, act_space, {})}
-    def policy_mapping_fn(agent_id, episode, worker, **kwargs):
-        return "shared_policy"
+        policies = {"shared_policy": (None, obs_space, act_space, {})}
+        def policy_mapping_fn(agent_id, episode, worker, **kwargs):
+            return "shared_policy"
 
-    config = (
-        PPOConfig()
-        .environment(env=env_name)
-        .api_stack(
-            enable_rl_module_and_learner=False,
-            enable_env_runner_and_connector_v2=False,
+        # 設定 PPOConfig (指定剛剛註冊的環境名稱)
+        algo_config = (
+            PPOConfig()
+            .environment(env=env_name)
+            .api_stack(
+                enable_rl_module_and_learner=False,
+                enable_env_runner_and_connector_v2=False,
+            )
+            .env_runners(
+                num_env_runners=n_runner, 
+                num_envs_per_env_runner=1,         
+                rollout_fragment_length=30,  
+                sample_timeout_s=600.0
+            ) 
+            .resources(
+                num_gpus=1,                        
+                num_cpus_per_worker=1              
+            )
+            .multi_agent(
+                policies=policies,
+                policy_mapping_fn=policy_mapping_fn,
+                count_steps_by="agent_steps"
+            )
+            .callbacks(CMARL_LagrangianCallback)
+            .training(
+                gamma=0.99,            
+                lr_schedule=[[0, 1e-4], [10 * train_batch_size, 5e-5], [30 * train_batch_size, 1e-5]],               
+                train_batch_size=train_batch_size, 
+                clip_param=0.2,       
+                entropy_coeff=0.01,   
+                model={"custom_model": "my_ctde_model"}
+            )
+            .debugging(log_level="WARN")
         )
-        .env_runners(
-            num_env_runners=n_runner, 
-            num_envs_per_env_runner=1,         
-            rollout_fragment_length=30,  
-            sample_timeout_s=600.0
-        ) 
-        .resources(
-            num_gpus=1,                        
-            num_cpus_per_worker=1              
-        )
-        .multi_agent(
-            policies=policies,
-            policy_mapping_fn=policy_mapping_fn,
-            count_steps_by="agent_steps"
-        )
-        .callbacks(CMARL_LagrangianCallback) 
-        .training(
-            gamma=0.99,            
-            lr_schedule=[
-                [0, 1e-4],          
-                [10 * train_batch_size, 5e-5],     
-                [30 * train_batch_size, 1e-5]     
-            ],               
-            train_batch_size=train_batch_size, 
-            clip_param=0.2,       
-            entropy_coeff=0.01,   
-            model={
-                "custom_model": "my_ctde_model",
-            }
-        )
-        .debugging(log_level="WARN")
-    )
 
-    # 1. 建立設定好的全新訓練演算法 (包含了新的 lr_schedule 等)
-    algo = config.build_algo()
-    print("神經網路 (CTDE) 結構建構完成！")
+        algo = algo_config.build_algo()
+        
+        # 針對這個權重組合，建立專屬的資料夾
+        checkpoint_dir = f"{MY_CONST_NAME}_checkpoints/{run_name}"
+        if (IS_MYOTIC): checkpoint_dir = f"{MY_CONST_NAME}_myotic_checkpoints/{run_name}"
 
-    # =================================================================
-    # 【新增】：Finetune Checkpoint 載入功能 (使用 .restore())
-    # =================================================================
-    if RESTORE_CHECKPOINT_PATH and os.path.exists(RESTORE_CHECKPOINT_PATH):
-        print(f"🔄 發現 Checkpoint 設定，正在從 {RESTORE_CHECKPOINT_PATH} 載入模型權重進行 Finetune...")
-        algo.restore(RESTORE_CHECKPOINT_PATH)
-        print("✅ 大腦權重載入成功！開始進行接續訓練 / 微調！")
-    else:
-        print("▶️ 未指定 Checkpoint 或路徑不存在，將從第 0 代「從頭開始」訓練。")
-    # =================================================================
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        log_file_path = os.path.join(checkpoint_dir, f"training_log.csv")
+        
+        with open(log_file_path, "w", newline="") as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(["Iteration", "Reward", "Cost_Rate", "Lambda", "Tx_Cost", "Comp_Time"])
+            
+            # 用來計算最後幾代的平均值
+            final_tx_costs = []
+            final_comp_times = []
 
-    checkpoint_dir = f"./satellite_{MY_CONST_NAME}_checkpoints" if not IS_MYOTIC else f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"
-    os.makedirs(checkpoint_dir, exist_ok=True)
+            for i in range(N_TRAIN_ITER):
+                result = algo.train()
+                # 取出數據
+                reward_mean = result["env_runners"]["episode_reward_mean"]
+                custom_metrics = result.get("env_runners", {}).get("custom_metrics", {})
+                cost_mean = custom_metrics.get("episode_cost_mean", 0.0)
+                comp_time_mean = custom_metrics.get("completion_time_mean", 0.0)
+                tx_cost_mean = custom_metrics.get("transmission_cost_mean", 0.0)
+                lam = result["custom_metrics"].get("lambda_weight", 0.0)
+                
+                print(f"Iter {i:03d} | 超時率: {cost_mean*100:.1f}% | 步數: {comp_time_mean:.1f} | 流量: {tx_cost_mean:.1f}")
+                csv_writer.writerow([i, reward_mean, cost_mean, lam, tx_cost_mean, comp_time_mean])
+                csv_file.flush()
+                
+                # 如果是最後 10 代，把數據存起來算平均
+                if i >= N_TRAIN_ITER - 10:
+                    final_tx_costs.append(tx_cost_mean)
+                    final_comp_times.append(comp_time_mean)
 
-    log_file_path = os.path.join(checkpoint_dir, f"training_log_{MY_CONST_NAME}.csv")
+                if i % 10 == 0:
+                    algo.save(checkpoint_dir)
+
+        # 訓練結束，計算該模型的最終表現，並存入總表
+        avg_comp_time = np.mean(final_comp_times)
+        avg_tx_cost = np.mean(final_tx_costs)
+        pareto_results.append((w_t, w_c, avg_comp_time, avg_tx_cost))
+        
+        # 儲存最後的模型，並清理記憶體以準備跑下一個權重
+        algo.save(checkpoint_dir)
+        algo.stop()
+        
+    print("\n" + "="*50)
+    print("🏆 Pareto 掃描結束！以下是所有模型的最終表現：")
+
+    # write result csv
+    log_file_path = f"{MY_CONST_NAME}_checkpoints/pareto_result.csv"
+    if (IS_MYOTIC): log_file_path = f"{MY_CONST_NAME}_myotic_checkpoints/pareto_result.csv"
+
     csv_file = open(log_file_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(["Iteration", "Reward", "Cost_Rate", "Lambda", "Tx_Cost", "Comp_Time"])
-
-    for i in range(N_TRAIN_ITER):
-        result = algo.train()
-        reward_mean = result["env_runners"]["episode_reward_mean"]
-        
-        env_metrics = result.get("env_runners", {})
-        custom_metrics = env_metrics.get("custom_metrics", {})
-        cost_mean = custom_metrics.get("episode_cost_mean", 0.0)
-        comp_time_mean = custom_metrics.get("completion_time_mean", 0.0)
-        tx_cost_mean = custom_metrics.get("transmission_cost_mean", 0.0)
-        lam = result["custom_metrics"].get("lambda_weight", 0.0)
-        # 【新增】：抓取並印出 Action 平均值
-        isl_mean = custom_metrics.get("avg_isl_mean", 0.0)
-        dl_mean = custom_metrics.get("avg_dl_mean", 0.0)
-        
-        print(f"Iter {i:03d} | 全局 Reward: {reward_mean:.2f} | 超時率(Cost): {cost_mean*100:.1f}% | 懲罰權重(Lambda): {lam:.3f}")
-        print(f"完成步數: {comp_time_mean:.1f} | 總流量: {tx_cost_mean:.1f}")
-        print(f"神經網路 Action 輸出平均 -> ISL: {isl_mean:.3f} | Downlink: {dl_mean:.3f}")
-
-        csv_writer.writerow([i, reward_mean, cost_mean, lam, tx_cost_mean, comp_time_mean])
-        csv_file.flush() 
-
-        if i % 10 == 0:
-            algo.save(checkpoint_dir)
-
-    print("訓練結束！")
+    csv_writer.writerow(["omega_t", "omega_c", "Comp_Time", "Tx_Cost"])
+    for res in pareto_results:
+        print(f"Omega_T: {res[0]}, Omega_C: {res[1]} -> 平均完成時間: {res[2]:.2f}, 傳輸流量: {res[3]:.2f}")
+        csv_writer.writerow(list(res))
+    
     csv_file.close()
     ray.shutdown()
 
