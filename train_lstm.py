@@ -5,6 +5,7 @@ import csv
 from param import *
 import ray
 from ray import tune
+from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
@@ -363,7 +364,7 @@ def main():
     for idx, config in enumerate(PARETO_CONFIGS):
         w_t = config["omega_t"]
         w_c = config["omega_c"]
-        run_name = f"Run_{idx}_WT{w_t}_WC{w_c}"
+        run_name = f"WT{int(w_t * 10)}_WC{int(w_c * 10)}"
         
         print("\n" + "="*50)
         print(f"🚀 開始訓練模型: {run_name}")
@@ -377,6 +378,8 @@ def main():
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
         else:
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+
+        algo = Algorithm.from_checkpoint(os.path.abspath(checkpoint_path))
 
         # ... (取得 dummy_env 等初始化程式碼照舊) ...
         dummy_env = env_creator(config)
@@ -481,7 +484,7 @@ def main():
     log_file_path = f"{MY_CONST_NAME}_checkpoints/pareto_result.csv"
     if (IS_MYOTIC): log_file_path = f"{MY_CONST_NAME}_myotic_checkpoints/pareto_result.csv"
 
-    csv_file = open(log_file_path, "w", newline="")
+    csv_file = open(log_file_path, "a", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(["omega_t", "omega_c", "Comp_Time", "Tx_Cost"])
     for res in pareto_results:

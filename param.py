@@ -5,11 +5,12 @@ STARLINK_S2 =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=90, target_k=
 STARLINK_NO_ISL_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=90, target_k=50, n_neighbor=0) # p = 36, 20
 # TELESAT =   Const_Param(alt=1000, inc=99, p=27, s=13,  t_max=90, target_k=40) # K = 10, T = 40 (too high)
 AMAZON =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50) 
+AMAZON_NO_ISL_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50, n_neighbor=0) 
 
-TEST_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30) # p = 13, s = 10
-TEST_W3_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30, Tw=3) # p = 13, s = 10
-TEST_W4_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30, Tw=4) # p = 13, s = 10
-TEST_NO_ISL_ =     Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30, n_neighbor=0) # p = 13, s = 10
+TEST_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30) # p = 13, s = 10
+TEST_W3_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, Tw=3) # p = 13, s = 10
+TEST_W4_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, Tw=4) # p = 13, s = 10
+TEST_NO_ISL_ =     Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, n_neighbor=0) # p = 13, s = 10
 
 # TEST2_ =        Const_Param(alt=540.0, inc=53.2, p=6, s=10,  t_max=90, target_k=60) # fail to converge..
 # TEST3_ =        Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30) # MAPPO failed 200 iter
@@ -27,20 +28,20 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "starlink_no_isl"
+MY_CONST_NAME = "test_no_isl"
 
 USE_DEFICIT = True
 
 ############# training setting ############
 IS_MYOTIC = False
-N_TRAIN_ITER = 50
+N_TRAIN_ITER = 10
 N_USER = 40 # for training
 ERASURE = 0.1
 DO_TEST_LOG = True
 
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
-else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
-_path = None
+else:               _path = f"./{MY_CONST_NAME}_checkpoints/WT3_WC7"
+# _path = None
 
 if _path is not None: RESTORE_CHECKPOINT_PATH = os.path.abspath(_path)
 else:                 RESTORE_CHECKPOINT_PATH = None
@@ -52,7 +53,7 @@ PARETO_CONFIGS = [
     # {"omega_t": 0.8, "omega_c": 0.2},
     # {"omega_t": 0.7, "omega_c": 0.3},
     # {"omega_t": 0.6, "omega_c": 0.4},
-    {"omega_t": 0.5, "omega_c": 0.5}, # 平衡
+    # {"omega_t": 0.5, "omega_c": 0.5}, # 平衡
     # {"omega_t": 0.4, "omega_c": 0.6}, 
     # {"omega_t": 0.3, "omega_c": 0.7},
     # {"omega_t": 0.2, "omega_c": 0.8},
@@ -62,15 +63,18 @@ PARETO_CONFIGS = [
 
 ###########################################
 
-# TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["GREEDY"] # "GREEDY", "ERNC" , "STATIC_R"
+TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
+# TEST_MODES = ["GREEDY"] # "GREEDY", "ERNC" , "STATIC_R"
 IS_TEST_MODE = True # extra test mode for env
 PLOT_USER_NUM = 400
+
+TEST_CHECKPOINT_PATH = f"./satellite_{MY_CONST_NAME}_checkpoints"
 
 # if MY_CONST_NAME == "telesat":       CONST_PARAM = TELESAT
 if MY_CONST_NAME == "starlink":   CONST_PARAM = STARLINK_S2
 elif MY_CONST_NAME == "starlink_no_isl":   CONST_PARAM = STARLINK_NO_ISL_
 elif MY_CONST_NAME == 'amazon':    CONST_PARAM = AMAZON
+elif MY_CONST_NAME == 'amazon_no_isl':    CONST_PARAM = AMAZON_NO_ISL_
 elif MY_CONST_NAME == 'test_grid':      CONST_PARAM = TEST_GRID_
 elif MY_CONST_NAME == 'test4':      CONST_PARAM = TEST4_
 elif MY_CONST_NAME == 'test_w3':      CONST_PARAM = TEST_W3_

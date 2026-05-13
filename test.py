@@ -29,7 +29,7 @@ USER_NUMBERS = [40] # [1, 40, 80, 120, 160]
 # USER_NUMBERS = [100, 200, 300, 400]
 ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
 NUM_EPISODES = 3
-T_MAX = 90 #CONST_PARAM.t_max
+T_MAX = 200 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
@@ -202,7 +202,7 @@ def action_static_r(real_id, actual_env, current_time, static_plan):
 # ╔══════════════════════════════════════════════════════╗
 # ║  測試主迴圈                                           ║
 # ╚══════════════════════════════════════════════════════╝
-def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True):
+def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True, omega_t=0.5, omega_c=0.5):
     avg_tx_costs      = []
     avg_fulfill_rates = []
     avg_comp_times    = []
@@ -219,14 +219,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
         csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure"])
 
 
-    for p_config in PARETO_CONFIGS:
-        
-        omega_t = p_config["omega_t"]
-        omega_c = p_config["omega_c"]
+    for era in ERASURES:
 
-        for era in ERASURES:
-
-            for n_users in user_numbers:
+        for n_users in user_numbers:
                 print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══")
                 with open(log_txt_file, "a") as f:
                     f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══\n")
@@ -375,38 +370,47 @@ def main():
 
     for mode in TEST_MODES: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
-        if mode == "MAPPO":
-            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
-            def env_creator(cfg):
-                return ParallelPettingZooEnv(
-                    SatelliteDataDisseminationEnv(
-                        const_param=CONST_PARAM, 
-                        T_max=T_MAX, 
-                        num_users=cfg.get("num_users", 80),
-                        erasure=cfg.get("erasure", 0.1),    
-                        test_mode=IS_TEST_MODE
-                ))
-            register_env("satellite_nc_env", env_creator)
-            algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_checkpoints"))
-            print("MAPPO 載入完成")
+        for p_config in PARETO_CONFIGS:
+        
+            omega_t = p_config["omega_t"]
+            omega_c = p_config["omega_c"]
 
-        elif mode == "MYOTIC":
-            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
-            def env_creator(cfg):
-                return ParallelPettingZooEnv(
-                    SatelliteDataDisseminationEnv(
-                        const_param=CONST_PARAM, T_max=T_MAX, 
-                        num_users=cfg.get("num_users", 80),
-                        erasure=cfg.get("erasure", 0.1),    
-                        is_myotic=True, 
-                        test_mode=IS_TEST_MODE
-                ))
-            register_env("satellite_nc_env", env_creator)
-            algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
-            print("MYOTIC 載入完成")
+            if mode == "MAPPO":
+                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+                def env_creator(cfg):
+                    return ParallelPettingZooEnv(
+                        SatelliteDataDisseminationEnv(
+                            const_param=CONST_PARAM, 
+                            T_max=T_MAX, 
+                            num_users=cfg.get("num_users", 80),
+                            erasure=cfg.get("erasure", 0.1),    
+                            test_mode=IS_TEST_MODE
+                    ))
+                register_env("satellite_nc_env", env_creator)
 
-        tx_costs, fulfill_rates, times = run_mode(
-            mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG)
+                # checkpoint_path = TEST_CHECKPOINT_PATH
+                checkpoint_path = f"{MY_CONST_NAME}_checkpoints/WT{int(omega_t * 10)}_WC{int(omega_c * 10)}"
+                algo = Algorithm.from_checkpoint(os.path.abspath(checkpoint_path))
+                print("MAPPO 載入完成")
+
+            elif mode == "MYOTIC":
+                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+                def env_creator(cfg):
+                    return ParallelPettingZooEnv(
+                        SatelliteDataDisseminationEnv(
+                            const_param=CONST_PARAM, T_max=T_MAX, 
+                            num_users=cfg.get("num_users", 80),
+                            erasure=cfg.get("erasure", 0.1),    
+                            is_myotic=True, 
+                            test_mode=IS_TEST_MODE
+                    ))
+                register_env("satellite_nc_env", env_creator)
+                algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
+                print("MYOTIC 載入完成")
+
+            tx_costs, fulfill_rates, times = run_mode(
+                mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG, 
+                omega_t=omega_t, omega_c=omega_c)
 
     ray.shutdown()
 
