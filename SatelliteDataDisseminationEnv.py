@@ -11,7 +11,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
     def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False, use_deficit=False,
-                 omega_t=0.5, omega_c=0.5, enable_ISL=True):
+                 omega_t=0.5, omega_c=0.5):
         super().__init__()
 
         # 1. 定義 param
@@ -31,7 +31,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.omega_c = omega_c
 
         # # ablation param
-        # self.enable_ISL = enable_ISL
+        self.enable_RLNC = const_param.enable_RLNC
         
         if (is_myotic): self.Tw = 1
 
@@ -59,7 +59,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         # 初始化 N x N 的虛擬帳本 (row: 資料原創者, col: 資料目前持有者)
         # self.ledger = np.zeros((self.N, self.N), dtype=np.float32)
-        self.agent_progress = np.zeros(self.N, dtype=np.float32)
+        # self.agent_progress = np.zeros(self.N, dtype=np.float32)
 
         self.tx_cost_avg = {}
         for agent_name in self.agents:
@@ -110,6 +110,14 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.broadcast_rate_bps = 30e6 * 1.0 
         self.packet_size_bits = 80e6 # 10 MB = 80 Mbits
 
+        # ARQ queue
+        self.global_arq_queue = {}
+        if not self.enable_RLNC:
+            total_users = sum([len(g.users) for g in self.constellation.user_grids])
+            all_user_ids = set(range(total_users))
+            # 建立 Queue：封包 ID 0 ~ target_k-1，一開始每個封包都缺所有人的 ACK
+            self.global_arq_queue = {pkt_id: set(all_user_ids) for pkt_id in range(self.target_k)}
+
     def reset(self, seed=None, options=None):
         """回合開始: 重置時間、位置、Buffer 與 DoF 進度"""
         self.agents = self.possible_agents[:]
@@ -120,9 +128,12 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         # 這裡重置你的 LEO buffers 與地面的 received_dof
         self.constellation.reset()
 
-        # 重置帳本，並把初始 Buffer 記在各自衛星名下
-        # self.ledger = np.zeros((self.N, self.N), dtype=np.float32)
-        self.agent_progress = np.zeros(self.N, dtype=np.float32)
+        if not getattr(self, 'enable_RLNC', True):
+            # 算出全網格總共有多少個 users
+            n_users = self.constellation.users_per_grid * self.constellation.n_grids #sum([len(g.users) for g in self.constellation.user_grids])
+            all_user_ids = set(range(n_users))
+            # 建立 Queue：封包 ID 0 ~ target_k-1，一開始每個封包都缺所有人的 ACK
+            self.global_arq_queue = {pkt_id: set(all_user_ids) for pkt_id in range(self.target_k)}
 
         for agent_name in self.agents:
             self.tx_cost_avg[agent_name] = 0.0
@@ -228,26 +239,72 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 self.episode_tx_cost += actual_flow * self.ISL_cost_factor
 
             # Inter-tier (給地面)
-            contact_capacity = self.constellation.get_downlink_capacity()
-            buf_i = self.constellation.get_leo_buffer(i)
-            actual_flow = min(buf_i, action_probs[self.M] * contact_capacity)
-
-            # Inter-tier (給地面)
-            contact_capacity = self.constellation.get_downlink_capacity()
-            if len(self.constellation.get_visible_grids(i, current_time)) > 0:
+            visible_grids = self.constellation.get_visible_grids(i, current_time)
+            if len(visible_grids) > 0:
                 action_mask[self.M] = 1.0
                 
+            contact_capacity = self.constellation.get_downlink_capacity()
             buf_i = self.constellation.get_leo_buffer(i)
-            actual_flow = min(buf_i, action_probs[self.M] * contact_capacity * action_mask[self.M]) 
 
-            acc_cost += actual_flow
-            acc_max_cost += max_buf
-            self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
+            if self.enable_RLNC:
+                actual_flow = min(buf_i, action_probs[self.M] * contact_capacity * action_mask[self.M]) 
+                acc_cost += actual_flow
+                acc_max_cost += max_buf
+                self.tx_cost_avg[agent_name] += acc_cost / acc_max_cost
 
-            # record progress as reward
-            old_ful = self.constellation.get_user_received_percent()
-            sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
-            new_ful = self.constellation.get_user_received_percent()
+                # record progress as reward
+                old_ful = self.constellation.get_user_received_percent()
+                sent_user_count = self.constellation.download_to_grid(i, amount=actual_flow, current_time=current_time)
+                new_ful = self.constellation.get_user_received_percent()
+
+            else:
+                # ==================================================
+                # 【真正的 No-RLNC 選擇性重傳 (Selective Repeat ARQ)】
+                # ==================================================
+                capacity = int(action_probs[self.M] * contact_capacity * action_mask[self.M])
+                actual_flow = 0.0
+                sent_user_count = 0
+
+                old_ful = self.constellation.get_user_received_percent()
+
+                if capacity > 0 and len(self.global_arq_queue) > 0:
+                    # 1. 找出目前這個衛星能看到的 User IDs
+                    visible_users = set()
+                    for g_idx in visible_grids:
+                        for u in self.constellation.user_grids[g_idx].users:
+                            visible_users.add(u.user_id)
+
+                    # 2. 從 Queue 中挑出「對可見用戶有意義」的封包準備發射 (Head-of-Line 排程)
+                    packets_to_send = []
+                    for pkt_id in list(self.global_arq_queue.keys()):
+                        pending_users = self.global_arq_queue[pkt_id]
+                        # 只要這個封包的「欠款名單」跟「目前可見用戶」有交集，就值得發射
+                        if len(pending_users.intersection(visible_users)) > 0:
+                            packets_to_send.append(pkt_id)
+                        # 受限於當前頻寬 capacity
+                        if len(packets_to_send) >= capacity:
+                            break
+                            
+                    actual_flow = len(packets_to_send)
+
+                    # 3. 呼叫物理層傳輸，並回收 ACK
+                    if actual_flow > 0:
+                        success_acks = self.constellation.download_arq_to_grid(i, packets_to_send, current_time)
+                        sent_user_count = len(set([u_id for u_id, p_id in success_acks]))
+
+                        # 4. 根據 ACK 從 Queue 中劃掉名單
+                        for u_id, pkt_id in success_acks:
+                            if pkt_id in self.global_arq_queue and u_id in self.global_arq_queue[pkt_id]:
+                                self.global_arq_queue[pkt_id].remove(u_id)
+
+                        # 5. 清理 Queue：如果某個封包所有人都收到了，正式將其剔除！
+                        for pkt_id in list(self.global_arq_queue.keys()):
+                            if len(self.global_arq_queue[pkt_id]) == 0:
+                                del self.global_arq_queue[pkt_id]
+                    
+                new_ful = self.constellation.get_user_received_percent()
+
+            # count rewards
             delta_fulfill = new_ful - old_ful
             rewards[agent_name] += self.PROGRESS_SCALE * delta_fulfill
             for neighbor_id in self.constellation.get_rev_neighbors(i):

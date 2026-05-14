@@ -11,6 +11,7 @@ TEST_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k
 TEST_W3_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, Tw=3) # p = 13, s = 10
 TEST_W4_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, Tw=4) # p = 13, s = 10
 TEST_NO_ISL_ =     Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, n_neighbor=0) # p = 13, s = 10
+TEST_NO_RLNC_ =     Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=300, target_k=30, enable_RLNC=False) # p = 13, s = 10
 
 # TEST2_ =        Const_Param(alt=540.0, inc=53.2, p=6, s=10,  t_max=90, target_k=60) # fail to converge..
 # TEST3_ =        Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=90, target_k=30) # MAPPO failed 200 iter
@@ -28,34 +29,34 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "test_no_isl"
+MY_CONST_NAME = "test_no_rlnc"
 
 USE_DEFICIT = True
 
 ############# training setting ############
 IS_MYOTIC = False
-N_TRAIN_ITER = 10
+N_TRAIN_ITER = 50
 N_USER = 40 # for training
 ERASURE = 0.1
 DO_TEST_LOG = True
 
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
-else:               _path = f"./{MY_CONST_NAME}_checkpoints/WT3_WC7"
-# _path = None
+else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
+_path = None
 
 if _path is not None: RESTORE_CHECKPOINT_PATH = os.path.abspath(_path)
 else:                 RESTORE_CHECKPOINT_PATH = None
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
-    # {"omega_t": 1.0, "omega_c": 0.0}, # 極端求快
-    # {"omega_t": 0.9, "omega_c": 0.1}, 
-    # {"omega_t": 0.8, "omega_c": 0.2},
-    # {"omega_t": 0.7, "omega_c": 0.3},
-    # {"omega_t": 0.6, "omega_c": 0.4},
-    # {"omega_t": 0.5, "omega_c": 0.5}, # 平衡
-    # {"omega_t": 0.4, "omega_c": 0.6}, 
-    # {"omega_t": 0.3, "omega_c": 0.7},
+    {"omega_t": 1.0, "omega_c": 0.0}, # 極端求快
+    {"omega_t": 0.9, "omega_c": 0.1}, 
+    {"omega_t": 0.8, "omega_c": 0.2},
+    {"omega_t": 0.7, "omega_c": 0.3},
+    {"omega_t": 0.6, "omega_c": 0.4},
+    {"omega_t": 0.5, "omega_c": 0.5}, # 平衡
+    {"omega_t": 0.4, "omega_c": 0.6}, 
+    {"omega_t": 0.3, "omega_c": 0.7},
     # {"omega_t": 0.2, "omega_c": 0.8},
     # {"omega_t": 0.1, "omega_c": 0.9},  
     # {"omega_t": 0.0, "omega_c": 1.0},  # 極端省電
@@ -80,6 +81,7 @@ elif MY_CONST_NAME == 'test4':      CONST_PARAM = TEST4_
 elif MY_CONST_NAME == 'test_w3':      CONST_PARAM = TEST_W3_
 elif MY_CONST_NAME == 'test_w4':      CONST_PARAM = TEST_W4_
 elif MY_CONST_NAME == 'test_no_isl':      CONST_PARAM = TEST_NO_ISL_
+elif MY_CONST_NAME == 'test_no_rlnc':      CONST_PARAM = TEST_NO_RLNC_
 elif MY_CONST_NAME == 'test_hard':      CONST_PARAM = TEST_HARD_
 elif MY_CONST_NAME == 'test_dense':         CONST_PARAM = TEST_DENSE_
 elif MY_CONST_NAME == 'test_erasure':         CONST_PARAM = TEST_ERASURE_

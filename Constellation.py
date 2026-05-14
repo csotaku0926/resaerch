@@ -16,7 +16,7 @@ OneWeb:
 """
 class Const_Param:
     def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30, 
-                 grid_scale=10, n_neighbor=1, Tw=2):
+                 grid_scale=10, n_neighbor=1, Tw=2, enable_RLNC=True):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
@@ -29,14 +29,14 @@ class Const_Param:
         self.grid_scale = grid_scale
         self.n_neighbor = n_neighbor
         self.Tw = Tw
-        # self.erasure_rate = erasure_rate
+        self.enable_RLNC = enable_RLNC
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10, erasure=0.1,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=5.0,
-                 step_seconds=10, t_max=90, target_k=20, test_mode=False):
+                 step_seconds=10, t_max=90, target_k=20, test_mode=False, enable_RLNC=True):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
         self.inc = param.inc       # 傾角 (度)
@@ -91,6 +91,9 @@ class Constellation:
 
         # extra info
         self.estimated_recv = np.zeros(self.n_grids, dtype=np.float32)
+
+        # ablation method
+        self.enable_RLNC = enable_RLNC
 
         # time scale
         ts = load.timescale()
@@ -608,6 +611,41 @@ class Constellation:
             self.update_estimated_recv(agent_id, g_idx, amount, current_time)
         
         return usr_count
+
+    def download_arq_to_grid(self, agent_id: int, packets_to_send: list, current_time):
+        """
+        ARQ 專用的 downlink : 發送指定的 packet IDs
+        回傳: 成功收到封包的 (user_id, packet_id) 列表，讓 Env 可以去劃掉 ACK
+        """
+        grid_is = self.get_visible_grids(agent_id, current_time)
+        sat = self.agents[agent_id].skyfield_sat
+        
+        # 扣除 LEO 的發射次數 (1 個 packet_id 算 1 單位)
+        amount = len(packets_to_send)
+        if amount == 0: return 0
+        
+        self.agents[agent_id].send(amount)
+
+        success_acks = [] # 收集 ACK: [(user_id, packet_id), ...]
+
+        for g_idx in grid_is:
+            for ui, user in enumerate(self.user_grids[g_idx].users):
+                difference = sat - user.pos 
+                alt, _, _ = difference.at(current_time).altaz()
+                
+                if alt.degrees < self.min_angle_limit: 
+                    continue
+
+                user_erasure_rate = self.calculate_erasure_rate(agent_id, user, current_time)
+                
+                # 針對每一顆發送出來的未編碼封包，獨立丟骰子判定是否掉包
+                for pkt_id in packets_to_send:
+                    if np.random.rand() > user_erasure_rate:
+                        # 成功收到！觸發使用者的 ARQ 接收邏輯
+                        user.recv_arq(pkt_id)
+                        success_acks.append((user.user_id, pkt_id))
+                        
+        return success_acks
 
     def get_user_fulfill_percent(self) -> float:
         # return the percentage

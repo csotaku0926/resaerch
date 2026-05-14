@@ -11,6 +11,9 @@ class User:
         self.received_count = 0
         self.target_k = target_k
 
+        # for ARQ
+        self.received_packet_set = set()
+
     def get_dist_from_sat(self, sat: EarthSatellite, current_time):
         diff = sat - self.pos
 
@@ -24,9 +27,18 @@ class User:
     
     def recv(self, amount:int):
         self.received_count = min(self.received_count + amount, self.target_k)
+        return self.received_count
+
+    def recv_arq(self, packet_id: int):
+        """ARQ 專用的接收函數 (認封包 ID)"""
+        self.received_packet_set.add(packet_id)
+        # 更新 received_count，這樣 Constellation 計算完賽率 (fulfill_percent) 時就能無縫接軌
+        self.received_count = min(len(self.received_packet_set), self.target_k)
+        return self.received_count
 
     def reset(self):
         self.received_count = 0
+        self.received_packet_set.clear()
 
 
 # 實作邏輯：定義目標區域

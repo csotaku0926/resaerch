@@ -5,7 +5,7 @@ import csv
 from param import *
 import ray
 from ray import tune
-from ray.rllib.algorithms.algorithm import Algorithm
+# from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
@@ -379,8 +379,6 @@ def main():
         else:
             ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
 
-        algo = Algorithm.from_checkpoint(os.path.abspath(checkpoint_path))
-
         # ... (取得 dummy_env 等初始化程式碼照舊) ...
         dummy_env = env_creator(config)
         sample_agent = dummy_env.par_env.possible_agents[0]
@@ -430,6 +428,16 @@ def main():
         )
 
         algo = algo_config.build_algo()
+
+        # 2. 【新增】：將預訓練的權重載入這個新實體中
+        # 假設 checkpoint_path 有在 param.py 裡面定義 (例如 checkpoint_path = "./my_base_checkpoint")
+        checkpoint_path = RESTORE_CHECKPOINT_PATH
+        # checkpoint_path = f"{MY_CONST_NAME}_checkpoints/{run_name}"
+        if checkpoint_path is not None and os.path.exists(checkpoint_path):
+            print(f"📥 成功從 {checkpoint_path} 載入模型權重！")
+            algo.restore(os.path.abspath(checkpoint_path))
+        else:
+            print("⚠️ 警告：找不到 checkpoint_path，模型將從隨機權重開始訓練！")
         
         # 針對這個權重組合，建立專屬的資料夾
         checkpoint_dir = f"{MY_CONST_NAME}_checkpoints/{run_name}"
