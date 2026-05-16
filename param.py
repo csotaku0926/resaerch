@@ -74,8 +74,8 @@ else:                 RESTORE_CHECKPOINT_PATH = None
 
 ###########################################
 
-TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
-# TEST_MODES = ["GREEDY"] # "GREEDY", "ERNC" , "STATIC_R"
+# TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
+TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
 IS_TEST_MODE = True # extra test mode for env
 PLOT_USER_NUM = 400
 

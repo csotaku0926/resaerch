@@ -1,38 +1,45 @@
 
 [MYOTIC] ══ erasure=0.1 ══ n_users=1 ══
-  ep 01: tx=6262.9, time=56.2 fulfill=80.0%
-avg ISL ratio: 0.6889020800590515
-avg DL ratio: 0.62653648853302
-  ep 02: tx=18464.4, time=64.0 fulfill=80.0%
-avg ISL ratio: 0.6658337712287903
-avg DL ratio: 0.6228179335594177
-  ep 03: tx=70327.2, time=77.6 fulfill=80.0%
-avg ISL ratio: 0.6579736471176147
-avg DL ratio: 0.6093930006027222
-  → avg tx_cost=31684.87, fulfill=80.0%
+  ep 01: tx=4976.9, time=50.2 fulfill=80.0%
+avg ISL ratio: 0.6991081237792969
+avg DL ratio: 0.6441993117332458
+  ep 02: tx=4863.7, time=34.2 fulfill=90.0%
+avg ISL ratio: 0.6960932016372681
+avg DL ratio: 0.6409230828285217
+  ep 03: tx=12471.2, time=46.1 fulfill=90.0%
+avg ISL ratio: 0.6843305826187134
+avg DL ratio: 0.6284356117248535
+  → avg tx_cost=7437.27, fulfill=86.7%
 [MYOTIC] ══ erasure=0.1 ══ n_users=80 ══
-  ep 01: tx=35615.3, time=63.8125 fulfill=80.0%
-avg ISL ratio: 0.636963427066803
-avg DL ratio: 0.6201851963996887
-  ep 02: tx=25271.3, time=59.6375 fulfill=80.0%
-avg ISL ratio: 0.6384779214859009
-avg DL ratio: 0.6223705410957336
-  ep 03: tx=40071.3, time=56.95 fulfill=80.0%
-avg ISL ratio: 0.635754406452179
-avg DL ratio: 0.624051570892334
-  → avg tx_cost=33652.62, fulfill=80.0%
+  ep 01: tx=19385.3, time=56.575 fulfill=80.0%
+avg ISL ratio: 0.6441983580589294
+avg DL ratio: 0.6289075016975403
+  ep 02: tx=40504.2, time=56.025 fulfill=80.0%
+avg ISL ratio: 0.6351359486579895
+avg DL ratio: 0.6323913931846619
+  ep 03: tx=63619.4, time=65.1875 fulfill=80.0%
+avg ISL ratio: 0.6328504681587219
+avg DL ratio: 0.6262933611869812
+  → avg tx_cost=41169.65, fulfill=80.0%
 [MYOTIC] ══ erasure=0.1 ══ n_users=120 ══
-  ep 01: tx=66737.3, time=75.68333333333334 fulfill=80.8%
-avg ISL ratio: 0.6246888041496277
-avg DL ratio: 0.6242102980613708
-  ep 02: tx=82959.0, time=81.89166666666667 fulfill=74.2%
-avg ISL ratio: 0.6251358985900879
-avg DL ratio: 0.6205888986587524
-  ep 03: tx=40855.0, time=59.55833333333333 fulfill=80.0%
-avg ISL ratio: 0.6264551281929016
-avg DL ratio: 0.6212495565414429
-  → avg tx_cost=63517.09, fulfill=78.3%
+  ep 01: tx=82265.1, time=62.925 fulfill=78.3%
+avg ISL ratio: 0.6261741518974304
+avg DL ratio: 0.6198645234107971
+  ep 02: tx=28729.7, time=64.025 fulfill=80.0%
+avg ISL ratio: 0.6288526654243469
+avg DL ratio: 0.6208094954490662
+  ep 03: tx=10036.0, time=50.725 fulfill=81.7%
+avg ISL ratio: 0.6316277980804443
+avg DL ratio: 0.6223545074462891
+  → avg tx_cost=40343.57, fulfill=80.0%
 [MYOTIC] ══ erasure=0.1 ══ n_users=160 ══
-  ep 01: tx=21447.8, time=54.99375 fulfill=80.6%
-avg ISL ratio: 0.644171953201294
-avg DL ratio: 0.6294793486595154
+  ep 01: tx=19607.8, time=59.16875 fulfill=80.0%
+avg ISL ratio: 0.6425254940986633
+avg DL ratio: 0.630389392375946
+  ep 02: tx=31006.0, time=56.0125 fulfill=80.6%
+avg ISL ratio: 0.6379207372665405
+avg DL ratio: 0.6303112506866455
+  ep 03: tx=12773.6, time=52.24375 fulfill=81.2%
+avg ISL ratio: 0.6422969698905945
+avg DL ratio: 0.6313285231590271
+  → avg tx_cost=21129.15, fulfill=80.6%

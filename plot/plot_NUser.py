@@ -15,16 +15,6 @@ except ImportError:
 # ==========================================
 DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
-# 【修改 1】：建立映射對照表
-# 將 CSV 裡寫錯的數字，對應到畫圖時該顯示的真實數字
-# if MY_CONST_NAME == "test_dense":
-#     CSV_WRONG_NUMBERS = [1, 100, 200, 300, 400] 
-#     TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
-# # 若是在測試密集模式下，維持正確的數值
-# elif MY_CONST_NAME == "test_deficit_w4":
-#     CSV_WRONG_NUMBERS = [100, 200, 300, 400]
-#     TRUE_USER_NUMBERS = [100, 200, 300, 400]
-# else:
 CSV_WRONG_NUMBERS = [1, 40, 80, 120, 160]
 TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 
@@ -38,14 +28,20 @@ ALGO_CONFIG = {
     'Proposed': {
         'prefix': 'MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'
     },
-    'Myopic': {
-        'prefix': 'MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
-    },
     'ERNC': {
         'prefix': 'ERNC', 'color': 'orange', 'marker': '^', 'linestyle': ':'
     },
     'Greedy': {
         'prefix': 'GREEDY', 'color': 'gray', 'marker': 'x', 'linestyle': '--'
+    },
+    'Static': {
+        'prefix': 'STATIC_R', 'color': 'green', 'marker': 's', 'linestyle': '-.'
+    },
+    'Myopic': {
+        'prefix': 'MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
+    },
+    'Static': {
+        'prefix': 'STATIC_R', 'color': 'green', 'marker': 's', 'linestyle': '-.'
     },
     'Static': {
         'prefix': 'STATIC_R', 'color': 'green', 'marker': 's', 'linestyle': '-.'
