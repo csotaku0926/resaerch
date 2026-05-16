@@ -47,7 +47,8 @@ def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, num_users=n_user, step_seconds=step_second, test_mode=True, use_deficit=USE_DEFICIT)
+    env = SatelliteDataDisseminationEnv(const_param=CONST_, T_max=TMAX,
+                                        num_users=n_user, step_seconds=step_second, test_mode=True, use_deficit=USE_DEFICIT)
     obs, info = env.reset()
     
     # 獲取初始參數

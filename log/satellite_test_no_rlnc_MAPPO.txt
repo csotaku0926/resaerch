@@ -1,0 +1,12 @@
+
+[MAPPO] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=5007.0, time=236.75 fulfill=32.5%
+avg ISL ratio: 0.20119130611419678
+avg DL ratio: 0.9114270210266113
+  ep 02: tx=4731.0, time=211.65 fulfill=40.0%
+avg ISL ratio: 0.19199451804161072
+avg DL ratio: 0.9131471514701843
+  ep 03: tx=5520.0, time=222.1 fulfill=37.5%
+avg ISL ratio: 0.1878361999988556
+avg DL ratio: 0.9177923798561096
+  → avg tx_cost=5086.00, fulfill=36.7%

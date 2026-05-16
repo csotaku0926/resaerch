@@ -1,0 +1,12 @@
+
+[MAPPO] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=0.0, time=200.0 fulfill=0.0%
+avg ISL ratio: nan
+avg DL ratio: 0.25574353337287903
+  ep 02: tx=0.0, time=200.0 fulfill=0.0%
+avg ISL ratio: nan
+avg DL ratio: 0.2519811689853668
+  ep 03: tx=0.0, time=200.0 fulfill=0.0%
+avg ISL ratio: nan
+avg DL ratio: 0.25566643476486206
+  → avg tx_cost=0.00, fulfill=0.0%

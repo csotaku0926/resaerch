@@ -36,7 +36,7 @@ class Constellation:
                  meo_alt=10000, meo_inc=45.0,
                  n_grids=10, num_users=10, erasure=0.1,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=5.0,
-                 step_seconds=10, t_max=90, target_k=20, test_mode=False, enable_RLNC=True):
+                 step_seconds=10, t_max=90, target_k=20, test_mode=False, enable_RLNC=True, seed=1234):
         # --- 1. Starlink Shell 2 官方參數 ---
         self.alt = param.alt         # 高度 (km)
         self.inc = param.inc       # 傾角 (度)
@@ -91,6 +91,7 @@ class Constellation:
 
         # extra info
         self.estimated_recv = np.zeros(self.n_grids, dtype=np.float32)
+        self.seed = seed
 
         # ablation method
         self.enable_RLNC = enable_RLNC
@@ -108,7 +109,7 @@ class Constellation:
         self.MEO_NO_KOZAI = meo_n_rad_per_sec * 60.0
 
         # random seed
-        np.random.seed(1234)
+        np.random.seed(self.seed)
 
         # ------------ build constellation ------------------
         self.test_mode = test_mode

@@ -11,7 +11,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
     def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False, use_deficit=False,
-                 omega_t=0.5, omega_c=0.5):
+                 omega_t=0.5, omega_c=0.5, seed=1234):
         super().__init__()
 
         # 1. 定義 param
@@ -36,6 +36,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         if (is_myotic): self.Tw = 1
 
         self.grid_scale = const_param.grid_scale
+        self.seed = seed
 
         self.constellation = Constellation(
             param=const_param, 
@@ -45,7 +46,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
             step_seconds=step_seconds,
             test_mode=test_mode,
             grid_scale=self.grid_scale,
-            erasure=erasure
+            erasure=erasure,
+            seed=self.seed
         )
         self.N = len(self.constellation.agents)
         self.current_lambda = lambda_w
@@ -176,8 +178,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         rewards = {a: 0.0 for a in self.agents}
         sent_user_count = 0
 
-        if (self.current_step == 1):
-            print(actions)
+        # if (self.current_step == 1):
+        #     print(actions)
 
         ft = self.constellation.get_finish_time_cost()
         max_buf = self.constellation.get_leo_max_buffer()
@@ -261,7 +263,7 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
                 # ==================================================
                 # 【真正的 No-RLNC 選擇性重傳 (Selective Repeat ARQ)】
                 # ==================================================
-                capacity = int(action_probs[self.M] * contact_capacity * action_mask[self.M])
+                capacity = min(action_probs[self.M] * contact_capacity * action_mask[self.M], buf_i)
                 actual_flow = 0.0
                 sent_user_count = 0
 

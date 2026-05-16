@@ -437,11 +437,16 @@ def main():
             print(f"📥 成功從 {checkpoint_path} 載入模型權重！")
             algo.restore(os.path.abspath(checkpoint_path))
         else:
-            print("⚠️ 警告：找不到 checkpoint_path，模型將從隨機權重開始訓練！")
+            print("⚠️  警告：找不到 checkpoint_path，模型將從隨機權重開始訓練！")
         
         # 針對這個權重組合，建立專屬的資料夾
         checkpoint_dir = f"{MY_CONST_NAME}_checkpoints/{run_name}"
         if (IS_MYOTIC): checkpoint_dir = f"{MY_CONST_NAME}_myotic_checkpoints/{run_name}"
+
+        #  ========== tmp: skipping trained model
+        if os.path.exists(checkpoint_dir):
+            print(f"⚠️  detected existing pareto model at {checkpoint_dir}, skipping..")
+            continue
 
         os.makedirs(checkpoint_dir, exist_ok=True)
         log_file_path = os.path.join(checkpoint_dir, f"training_log.csv")
@@ -453,6 +458,7 @@ def main():
             # 用來計算最後幾代的平均值
             final_tx_costs = []
             final_comp_times = []
+            final_fulfill = []
 
             for i in range(N_TRAIN_ITER):
                 result = algo.train()
@@ -472,6 +478,7 @@ def main():
                 if i >= N_TRAIN_ITER - 10:
                     final_tx_costs.append(tx_cost_mean)
                     final_comp_times.append(comp_time_mean)
+                    final_fulfill.append(1 - cost_mean)
 
                 if i % 10 == 0:
                     algo.save(checkpoint_dir)
@@ -479,14 +486,15 @@ def main():
         # 訓練結束，計算該模型的最終表現，並存入總表
         avg_comp_time = np.mean(final_comp_times)
         avg_tx_cost = np.mean(final_tx_costs)
-        pareto_results.append((w_t, w_c, avg_comp_time, avg_tx_cost))
+        avg_fulfill = np.mean(final_fulfill)
+        pareto_results.append((w_t, w_c, avg_comp_time, avg_tx_cost, avg_fulfill))
         
         # 儲存最後的模型，並清理記憶體以準備跑下一個權重
         algo.save(checkpoint_dir)
         algo.stop()
         
     print("\n" + "="*50)
-    print("🏆 Pareto 掃描結束！以下是所有模型的最終表現：")
+    print(f"[{MY_CONST_NAME}] 🏆 Pareto 掃描結束！以下是所有模型的最終表現：")
 
     # write result csv
     log_file_path = f"{MY_CONST_NAME}_checkpoints/pareto_result.csv"

@@ -1,0 +1,12 @@
+
+[MYOTIC] ══ erasure=0.1 ══ n_users=40 ══
+  ep 01: tx=13209.4, time=124.0 fulfill=60.0%
+avg ISL ratio: 0.5723873972892761
+avg DL ratio: 0.8048732280731201
+  ep 02: tx=14838.1, time=82.3 fulfill=72.5%
+avg ISL ratio: 0.5525964498519897
+avg DL ratio: 0.8155562877655029
+  ep 03: tx=13505.2, time=99.825 fulfill=72.5%
+avg ISL ratio: 0.5542784333229065
+avg DL ratio: 0.8146540522575378
+  → avg tx_cost=13850.89, fulfill=68.3%

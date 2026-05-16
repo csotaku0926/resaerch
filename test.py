@@ -24,12 +24,12 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [40] # [1, 40, 80, 120, 160]
+USER_NUMBERS = [1, 40, 80, 120, 160]
 # ERASURES = [0.2]
 # USER_NUMBERS = [100, 200, 300, 400]
 ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
 NUM_EPISODES = 3
-T_MAX = 200 #CONST_PARAM.t_max
+T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
@@ -202,7 +202,7 @@ def action_static_r(real_id, actual_env, current_time, static_plan):
 # ╔══════════════════════════════════════════════════════╗
 # ║  測試主迴圈                                           ║
 # ╚══════════════════════════════════════════════════════╝
-def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True, omega_t=0.5, omega_c=0.5):
+def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True, omega_t=0.5, omega_c=0.5, seed=1234):
     avg_tx_costs      = []
     avg_fulfill_rates = []
     avg_comp_times    = []
@@ -213,150 +213,149 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
 
     if write_log:
         os.makedirs(checkpoint_dir, exist_ok=True)
-        log_file_path = os.path.join(checkpoint_dir, f"{mode}_test_log.csv")
+        log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log.csv")
         csv_file = open(log_file_path, "w", newline="")
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure"])
 
-
     for era in ERASURES:
 
         for n_users in user_numbers:
-                print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══")
-                with open(log_txt_file, "a") as f:
-                    f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══\n")
+            print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══")
+            with open(log_txt_file, "a") as f:
+                f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══\n")
 
-                if write_curve:
-                    curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_t{omega_t}_curve.csv")
-                    curve_csv_file = open(curve_file_path, "w", newline="")
-                    curve_csv_writer = csv.writer(curve_csv_file)
-                    curve_csv_writer.writerow(["step", "tx_cost", "fulfill"])
+            if write_curve:
+                curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_t{omega_t}_s{seed}_curve.csv")
+                curve_csv_file = open(curve_file_path, "w", newline="")
+                curve_csv_writer = csv.writer(curve_csv_file)
+                curve_csv_writer.writerow(["step", "tx_cost", "fulfill"])
 
-                raw_env = SatelliteDataDisseminationEnv(
-                    const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
-                    erasure=era,
-                    is_unicast=(not (mode == "MAPPO" or mode == "MYOTIC")),
-                    omega_t=omega_t, omega_c=omega_c
-                )
-                env = ParallelPettingZooEnv(raw_env)
+            raw_env = SatelliteDataDisseminationEnv(
+                const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
+                erasure=era,
+                is_unicast=(not (mode == "MAPPO" or mode == "MYOTIC")),
+                omega_t=omega_t, omega_c=omega_c, seed=seed
+            )
+            env = ParallelPettingZooEnv(raw_env)
 
-                # B3：離線計算固定分配計畫，整個 n_users 設定共用一個值
-                static_plan = None
-                if mode == "STATIC_R":
-                    # env.reset()
-                    actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
-                    print("  計算 Static Plan（離線步驟）...")
-                    static_plan = compute_static_plan(actual_env)
+            # B3：離線計算固定分配計畫，整個 n_users 設定共用一個值
+            static_plan = None
+            if mode == "STATIC_R":
+                # env.reset()
+                actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
+                print("  計算 Static Plan（離線步驟）...")
+                static_plan = compute_static_plan(actual_env)
 
-                tx_costs      = []
-                comp_times    = []
-                fulfill_rates = []
-                final_curve   = []
-                isl_ratios = [] # testing
-                dl_ratios = []
+            tx_costs      = []
+            comp_times    = []
+            fulfill_rates = []
+            final_curve   = []
+            isl_ratios = [] # testing
+            dl_ratios = []
 
-                for ep in range(num_episodes):
-                    obs, _ = env.reset()
-                    actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
-                    done          = False
-                    final_tx_cost = 0.0
-                    current_ep_curve = []
+            for ep in range(num_episodes):
+                obs, _ = env.reset()
+                actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
+                done          = False
+                final_tx_cost = 0.0
+                current_ep_curve = []
 
-                    # print([u.pos for u in actual_env.constellation.user_grids[0].users])
+                # print([u.pos for u in actual_env.constellation.user_grids[0].users])
 
-                    while not done:
-                        current_time = current_skyfield_time(actual_env)
-                        actions = {}
+                while not done:
+                    current_time = current_skyfield_time(actual_env)
+                    actions = {}
 
-                        for agent_id, agent_obs in obs.items():
-                            real_id = actual_env.constellation.get_id_by_name(agent_id)
+                    for agent_id, agent_obs in obs.items():
+                        real_id = actual_env.constellation.get_id_by_name(agent_id)
 
-                            if mode == "MAPPO" or mode == "MYOTIC":
-                                actions[agent_id] = algo.compute_single_action(
-                                    observation=agent_obs,
-                                    policy_id="shared_policy",
-                                    explore=False)
-
-
-                            elif mode == "GREEDY":
-                                actions[agent_id] = action_greedy_rlnc(
-                                    real_id, actual_env, current_time)
+                        if mode == "MAPPO" or mode == "MYOTIC":
+                            actions[agent_id] = algo.compute_single_action(
+                                observation=agent_obs,
+                                policy_id="shared_policy",
+                                explore=False)
 
 
-                            elif mode == "ERNC":
-                                actions[agent_id] = action_ernc(
-                                    real_id, actual_env, current_time)
+                        elif mode == "GREEDY":
+                            actions[agent_id] = action_greedy_rlnc(
+                                real_id, actual_env, current_time)
 
-                            elif mode == "STATIC_R":
-                                actions[agent_id] = action_static_r(
-                                    real_id, actual_env, current_time, static_plan)
 
-                        obs, _, terminations, truncations, infos = env.step(actions)
-                        
-                        # 統計每個 agent 的 action 分布
-                        isl_ratio = np.mean([actions[a][:-1] for a in actions], axis=0)
-                        isl_ratios.append(isl_ratio)
-                        dl_ratio  = np.mean([actions[a][-1]  for a in actions])
-                        dl_ratios.append(dl_ratio)
-                        # print(f"平均 ISL 比例: {isl_ratio}, 平均 DL 比例: {dl_ratio}")
+                        elif mode == "ERNC":
+                            actions[agent_id] = action_ernc(
+                                real_id, actual_env, current_time)
 
-                        # 【新增 3】：記錄當下 Step 的完賽率
-                        step_val = actual_env.current_step
-                        current_fulfill = actual_env.constellation.get_user_fulfill_percent()
-                        current_tx_cost = actual_env.episode_tx_cost
-                        current_ep_curve.append((step_val, current_tx_cost, current_fulfill))
+                        elif mode == "STATIC_R":
+                            actions[agent_id] = action_static_r(
+                                real_id, actual_env, current_time, static_plan)
 
-                        if infos:
-                            first = list(infos.keys())[0]
-                            final_tx_cost = infos[first].get("tx_cost", 0.0)
-                            final_comp_time = infos[first].get("time", 0.0)
-
-                        done = (terminations.get("__all__", False) or
-                                truncations.get("__all__", False))
-                        
-                    # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
-                    if write_curve and (len(final_curve) == 0 or (
-                        ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) < len(final_curve)
-                    ) or (
-                        not ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) > len(final_curve)
-                    )): 
-                        final_curve = current_ep_curve
-
-                    fulfill = actual_env.constellation.get_user_fulfill_percent()
-                    tx_costs.append(final_tx_cost)
-                    comp_times.append(final_comp_time)
-                    fulfill_rates.append(fulfill)
-                    print(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time}"
-                        f" fulfill={fulfill*100:.1f}%")
+                    obs, _, terminations, truncations, infos = env.step(actions)
                     
-                    print("avg ISL ratio:", np.mean(isl_ratios))
-                    print("avg DL ratio:", np.mean(dl_ratios))
+                    # 統計每個 agent 的 action 分布
+                    isl_ratio = np.mean([actions[a][:-1] for a in actions], axis=0)
+                    isl_ratios.append(isl_ratio)
+                    dl_ratio  = np.mean([actions[a][-1]  for a in actions])
+                    dl_ratios.append(dl_ratio)
+                    # print(f"平均 ISL 比例: {isl_ratio}, 平均 DL 比例: {dl_ratio}")
 
-                    with open(log_txt_file, "a") as f:
-                        f.write(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time} fulfill={fulfill*100:.1f}%\n")
-                        f.write(f"avg ISL ratio: {np.mean(isl_ratios)}\n")
-                        f.write(f"avg DL ratio: {np.mean(dl_ratios)}\n")
+                    # 【新增 3】：記錄當下 Step 的完賽率
+                    step_val = actual_env.current_step
+                    current_fulfill = actual_env.constellation.get_user_fulfill_percent()
+                    current_tx_cost = actual_env.episode_tx_cost
+                    current_ep_curve.append((step_val, current_tx_cost, current_fulfill))
 
-                avg_tx  = float(np.mean(tx_costs))
-                avg_ful = float(np.mean(fulfill_rates))
-                avg_time = float(np.mean(comp_times))
-                avg_tx_costs.append(avg_tx)
-                avg_fulfill_rates.append(avg_ful)
-                avg_comp_times.append(avg_time)
-                print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
-                with open(log_txt_file, "a") as f:
-                    f.write(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+                    if infos:
+                        first = list(infos.keys())[0]
+                        final_tx_cost = infos[first].get("tx_cost", 0.0)
+                        final_comp_time = infos[first].get("time", 0.0)
+
+                    done = (terminations.get("__all__", False) or
+                            truncations.get("__all__", False))
                     
-                if write_log:
-                    csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time, era])
-                    csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
+                # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
+                if write_curve and (len(final_curve) == 0 or (
+                    ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) < len(final_curve)
+                ) or (
+                    not ((mode == "MAPPO") or (mode == "MYOTIC")) and len(current_ep_curve) > len(final_curve)
+                )): 
+                    final_curve = current_ep_curve
+
+                fulfill = actual_env.constellation.get_user_fulfill_percent()
+                tx_costs.append(final_tx_cost)
+                comp_times.append(final_comp_time)
+                fulfill_rates.append(fulfill)
+                print(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time}"
+                    f" fulfill={fulfill*100:.1f}%")
+                
+                print("avg ISL ratio:", np.mean(isl_ratios))
+                print("avg DL ratio:", np.mean(dl_ratios))
+
+                with open(log_txt_file, "a") as f:
+                    f.write(f"  ep {ep+1:02d}: tx={final_tx_cost:.1f}, time={final_comp_time} fulfill={fulfill*100:.1f}%\n")
+                    f.write(f"avg ISL ratio: {np.mean(isl_ratios)}\n")
+                    f.write(f"avg DL ratio: {np.mean(dl_ratios)}\n")
+
+            avg_tx  = float(np.mean(tx_costs))
+            avg_ful = float(np.mean(fulfill_rates))
+            avg_time = float(np.mean(comp_times))
+            avg_tx_costs.append(avg_tx)
+            avg_fulfill_rates.append(avg_ful)
+            avg_comp_times.append(avg_time)
+            print(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+            with open(log_txt_file, "a") as f:
+                f.write(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
+                
+            if write_log:
+                csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time, era])
+                csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在！
 
 
-                if write_curve: 
-                    for step, tx, ful in final_curve: 
-                        curve_csv_writer.writerow([step, tx, ful])
-                        curve_csv_file.flush()
-                    curve_csv_file.close()
+            if write_curve: 
+                for step, tx, ful in final_curve: 
+                    curve_csv_writer.writerow([step, tx, ful])
+                    curve_csv_file.flush()
+                curve_csv_file.close()
 
     if write_log: csv_file.close()
 
@@ -368,50 +367,91 @@ def main():
 
     algo = None
 
-    for mode in TEST_MODES: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
+    for seed in SEED_LIST:
+        # write result csv
+        if TEST_PARETO:
+            checkpoint_dir = f"{MY_CONST_NAME}_checkpoints"
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            log_file_path = f"{checkpoint_dir}/pareto_result_s{seed}.csv"
+            if (IS_MYOTIC): log_file_path = f"{MY_CONST_NAME}_myotic_checkpoints/pareto_result_s{seed}.csv"
 
-        for p_config in PARETO_CONFIGS:
-        
-            omega_t = p_config["omega_t"]
-            omega_c = p_config["omega_c"]
+            csv_file = open(log_file_path, "a", newline="")
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(["omega_t", "omega_c", "Comp_Time", "Tx_Cost", "Fulfill"])
 
-            if mode == "MAPPO":
-                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
-                def env_creator(cfg):
-                    return ParallelPettingZooEnv(
-                        SatelliteDataDisseminationEnv(
-                            const_param=CONST_PARAM, 
-                            T_max=T_MAX, 
-                            num_users=cfg.get("num_users", 80),
-                            erasure=cfg.get("erasure", 0.1),    
-                            test_mode=IS_TEST_MODE
-                    ))
-                register_env("satellite_nc_env", env_creator)
+        for mode in TEST_MODES: # "MAPPO" , "MYOTIC", "GREEDY" , "ERNC" , "STATIC_R"
 
-                # checkpoint_path = TEST_CHECKPOINT_PATH
-                checkpoint_path = f"{MY_CONST_NAME}_checkpoints/WT{int(omega_t * 10)}_WC{int(omega_c * 10)}"
-                algo = Algorithm.from_checkpoint(os.path.abspath(checkpoint_path))
-                print("MAPPO 載入完成")
+            for p_config in PARETO_CONFIGS:
+            
+                omega_t = p_config["omega_t"]
+                omega_c = p_config["omega_c"]
 
-            elif mode == "MYOTIC":
-                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
-                def env_creator(cfg):
-                    return ParallelPettingZooEnv(
-                        SatelliteDataDisseminationEnv(
-                            const_param=CONST_PARAM, T_max=T_MAX, 
-                            num_users=cfg.get("num_users", 80),
-                            erasure=cfg.get("erasure", 0.1),    
-                            is_myotic=True, 
-                            test_mode=IS_TEST_MODE
-                    ))
-                register_env("satellite_nc_env", env_creator)
-                algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
-                print("MYOTIC 載入完成")
+                run_name = f"WT{int(omega_t * 10)}_WC{int(omega_c * 10)}"
+                
+                if TEST_PARETO:
+                    env_name = f"satellite_nc_env_{run_name}"
+                else:
+                    env_name = "satellite_nc_env"
 
-            tx_costs, fulfill_rates, times = run_mode(
-                mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG, 
-                omega_t=omega_t, omega_c=omega_c)
+                # register customized model
+                if mode == "MAPPO":
+                    ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+                    def env_creator(cfg):
+                        return ParallelPettingZooEnv(
+                            SatelliteDataDisseminationEnv(
+                                const_param=CONST_PARAM, 
+                                T_max=T_MAX, 
+                                num_users=cfg.get("num_users", 80),
+                                erasure=cfg.get("erasure", 0.1),    
+                                test_mode=IS_TEST_MODE,
+                                seed=seed, # set current seed
+                        ))
+                    register_env(env_name, env_creator)
 
+                # register customized model
+                elif mode == "MYOTIC":
+                    ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+                    def env_creator(cfg):
+                        return ParallelPettingZooEnv(
+                            SatelliteDataDisseminationEnv(
+                                const_param=CONST_PARAM, T_max=T_MAX, 
+                                num_users=cfg.get("num_users", 80),
+                                erasure=cfg.get("erasure", 0.1),    
+                                is_myotic=True, 
+                                test_mode=IS_TEST_MODE,
+                                seed=seed
+                        ))
+                    register_env(env_name, env_creator)
+                    
+                # algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
+                if mode == "MAPPO" or mode == "MYOTIC":
+                    # load checkpoint
+                    if TEST_PARETO:
+                        _path = os.path.join(TEST_CHECKPOINT_PATH, run_name)
+                        if (not os.path.exists(_path)):
+                            print(f"⚠️ {_path} checkpoint not exist, skipping...")
+                            continue
+
+                        algo = Algorithm.from_checkpoint(os.path.abspath(_path))
+                    else:
+                        if (not os.path.exists(TEST_CHECKPOINT_PATH)):
+                            print(f"⚠️ {TEST_CHECKPOINT_PATH} checkpoint not exist, skipping...")
+                            continue
+                        algo = Algorithm.from_checkpoint(os.path.abspath(TEST_CHECKPOINT_PATH))
+                    print("[TEST.main] finish loading checkpoints!")
+
+                tx_costs, fulfill_rates, times = run_mode(
+                    mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG, 
+                    omega_t=omega_t, omega_c=omega_c, seed=seed)
+                
+                if TEST_PARETO:
+                    csv_writer.writerow([omega_t, omega_c, times[0], tx_costs[0], fulfill_rates[0]])
+
+                # if not CTDE, stop pareto loop
+                if mode != 'MAPPO' and mode != 'MYOTIC':
+                    break
+
+        if TEST_PARETO: csv_file.close()
     ray.shutdown()
 
 
