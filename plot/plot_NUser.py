@@ -18,12 +18,10 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 CSV_WRONG_NUMBERS = [1, 40, 80, 120, 160]
 TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 
-
 # 建立字典：{1: 1, 100: 40, 200: 80, ...}
 NUM_MAPPING = dict(zip(CSV_WRONG_NUMBERS, TRUE_USER_NUMBERS))
 
 X_COLUMN = 'User_Num'
-
 ALGO_CONFIG = {
     'Proposed': {
         'prefix': 'MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'

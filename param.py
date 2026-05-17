@@ -113,3 +113,11 @@ elif MY_CONST_NAME == 'test':               CONST_PARAM = TEST_
 else:                                raise NameError(f"Not known Const Name: {MY_CONST_NAME}")
 
 TEST_ID = 'Starlink_Shell2_0_2'
+
+
+######## plot settings ########
+# 定義每條線的點樣式(Marker)與顏色
+MARKERS = ['x', 'x', 'x', 'o', 's', 'v', '^']
+COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', '#2ca02c'] # 經典的藍、橘、綠
+LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'dashed']
+ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"]
