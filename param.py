@@ -33,11 +33,11 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "test_dense"
+MY_CONST_NAME = "starlink"
 
 USE_DEFICIT = True
 
-SEED_LIST = [1, 12, 123, 1234]
+SEED_LIST = [1, 12, 123]
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
@@ -65,8 +65,8 @@ N_USER = 40 # for training
 ERASURE = 0.1
 DO_TEST_LOG = True
 
-if IS_MYOTIC:       _path = f"./{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
-else:               _path = f"./{MY_CONST_NAME}_checkpoints/"
+if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
+else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
 _path = None
 
 if _path is not None: RESTORE_CHECKPOINT_PATH = os.path.abspath(_path)
@@ -74,16 +74,16 @@ else:                 RESTORE_CHECKPOINT_PATH = None
 
 ###########################################
 
-# TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
+TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
+# TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
 IS_TEST_MODE = True # extra test mode for env
 PLOT_USER_NUM = 400
 
 # TEST_CHECKPOINT_PATH = f"./satellite_{MY_CONST_NAME}_checkpoints"
-if IS_MYOTIC:   TEST_CHECKPOINT_PATH = f"./{MY_CONST_NAME}_myotic_checkpoints"
-else:           TEST_CHECKPOINT_PATH = f"./{MY_CONST_NAME}_checkpoints" # f"./satellite_{MY_CONST_NAME}_checkpoints"
+if IS_MYOTIC:   TEST_CHECKPOINT_PATH = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"
+else:           TEST_CHECKPOINT_PATH = f"./satellite_{MY_CONST_NAME}_checkpoints" # f"./satellite_{MY_CONST_NAME}_checkpoints"
 # set to True if checkpoint it stored in checkpoints/WTX_WCX
-TEST_PARETO = True
+TEST_PARETO = False
 
 #######################################################
 # if MY_CONST_NAME == "telesat":       CONST_PARAM = TELESAT
