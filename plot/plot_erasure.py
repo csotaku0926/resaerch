@@ -6,39 +6,30 @@ import sys
 # 載入上一層目錄的 param.py
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 try:
-    from param import MY_CONST_NAME
+    from param import *
 except ImportError:
     MY_CONST_NAME = "test"
 
 # ==========================================
 # 1. 統一的基礎設定 (Configuration)
 # ==========================================
-DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
+# 1. 定義檔案路徑與你想在圖例(Legend)上顯示的名稱
+# (你可以把 label 改成你在論文裡命名的演算法名稱，例如 "Proposed CMARL (w=3)")
+data_sources = [
+    {"prefix": "satellite_test_dense_no_rlnc_checkpoints/MAPPO", "label": "No-RLNC"},
+    {"prefix": "satellite_test_dense_no_isl_checkpoints/MAPPO", "label": "No-ISL"},
+    {"prefix": "satellite_test_dense_checkpoints/MYOTIC", "label": "Myopic"},
+    {"prefix": "satellite_test_dense_checkpoints/MAPPO", "label": "Proposed (Tw=2)"},
+    # {"prefix": "satellite_test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
+    # {"prefix": "satellite_test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
+]
+
 
 # 請確認這裡的 USER_NUMBERS 跟你跑 test.py 時的設定一致
 ERASURE_RATES = [0.1, 0.2, 0.3, 0.4] 
 
 X_COLUMN = 'erasure'
 
-# 【統一管理區】在這裡設定演算法名稱、檔案前綴與繪圖樣式
-# 之後所有的圖都會統一使用這裡的設定，保證風格完全一致
-ALGO_CONFIG = {
-    'Proposed': {
-        'prefix': 'MAPPO', 'color': 'blue', 'marker': 'o', 'linestyle': '-'
-    },
-    'Myopic': {
-        'prefix': 'MYOTIC', 'color': 'red', 'marker': 'o', 'linestyle': '-'
-    },
-    'ERNC': {
-        'prefix': 'ERNC', 'color': 'orange', 'marker': '^', 'linestyle': ':'
-    },
-    'Greedy': {
-        'prefix': 'GREEDY', 'color': 'gray', 'marker': 'x', 'linestyle': '--'
-    },
-    'Static': {
-        'prefix': 'STATIC_R', 'color': 'green', 'marker': 's', 'linestyle': '-.'
-    }
-}
 
 # ==========================================
 # 2. 繪製來自 test_log.csv 的指標 (Tx Cost, Comp Time)
@@ -52,20 +43,88 @@ def plot_test_log_metrics():
     for metric, labels in METRICS_TO_PLOT.items():
         plt.figure(figsize=(8, 6))
         
-        for algo_label, config in ALGO_CONFIG.items():
-            # 讀取例如 MAPPO_test_log.csv
-            file_path = os.path.join(DIR_NAME, f"{config['prefix']}_test_log.csv")
-            if os.path.exists(file_path):
-                df = pd.read_csv(file_path)
-                if metric in df.columns and X_COLUMN in df.columns:
-                    plt.plot(
-                        df[X_COLUMN], df[metric] / df["Fulfill"] * 0.8, 
-                        label=algo_label, 
-                        color=config['color'], marker=config['marker'], 
-                        linestyle=config['linestyle'], linewidth=2.5, markersize=8
-                    )
-            else:
-                pass # 可以選擇印出警告: print(f"找不到 {file_path}")
+        for i, data in enumerate(data_sources):
+            prefix = data["prefix"]
+            label = data["label"]
+
+            # 建立字典來存放每個人數 (User_Num) 來自不同 seed 的 Tx_Cost
+            # 結構大概是：{1: [cost_s1, cost_s2...], 40: [cost_s1, cost_s2...], ...}
+            tx_costs_per_erasure = {u: [] for u in ERASURE_RATES} 
+
+            # 遍歷所有 seed，讀取對應的 test_log.csv
+            for seed in SEED_LIST:
+
+                file_path = f"{prefix}_s{seed}_test_log_erasure.csv"
+
+                if os.path.exists(file_path):
+
+                    try:
+                        df = pd.read_csv(file_path)
+                        # 遍歷每一行，把 Tx_Cost 塞進對應的 User_Num 陣列裡
+                        for _, row in df.iterrows():
+                            u = row['erasure']
+                            if u in tx_costs_per_erasure:
+                                cost = row['Tx_Cost']
+                                ful = row['Fulfill']
+                                tx_costs_per_erasure[u].append(cost / ful)
+                    except pd.errors.EmptyDataError:
+                        print(f"⚠️ empty file: {file_path}, skipping")
+                        continue
+
+                else:
+                    print(f"⚠️ 找不到檔案: {file_path}, skipping")
+                    break
+
+            # 準備畫圖用的陣列
+            x_users_plot = []
+            y_mean_Tx = []
+            y_margin_Tx = []
+
+            # 計算每個人數的平均值與 95% CI 誤差半徑
+            for u in ERASURE_RATES:
+                costs = tx_costs_per_erasure[u]
+                n_seeds = len(costs)
+                
+                if n_seeds > 0:
+                    x_users_plot.append(u)
+                    mean_val = np.mean(costs)
+                    y_mean_Tx.append(mean_val)
+                    
+                    # 如果只有 1 個 seed，誤差半徑為 0
+                    if n_seeds == 1:
+                        y_margin_Tx.append(0.0)
+                    else:
+                        # 直接使用標準誤 (Standard Error) 作為誤差半徑
+                        se = np.std(costs, ddof=1) / np.sqrt(n_seeds)
+                        y_margin_Tx.append(se)
+
+            # ==========================================
+            # 3. 畫出實線與 95% CI 陰影帶
+            # ==========================================
+            if len(x_users_plot) > 0:
+                x_arr = np.array(x_users_plot)
+                y_mean = np.array(y_mean_Tx)
+                y_margin = np.array(y_margin_Tx)
+
+                # 1. 畫出平均值的主線 (實線)
+                plt.plot(
+                    x_arr, y_mean, 
+                    label=label, 
+                    color=COLORS[i], marker=MARKERS[i], 
+                    linestyle=LINESTYLES[i], linewidth=2.5, markersize=8
+                )
+
+                # 2. 畫出真正的 95% 信賴區間陰影 (並使用 np.maximum 確保下限不小於 0)
+                y_lower_bound = np.maximum(y_mean - y_margin, 0)
+                y_upper_bound = y_mean + y_margin
+
+                plt.fill_between(
+                    x_arr, 
+                    y_lower_bound, 
+                    y_upper_bound, 
+                    color=COLORS[i], 
+                    alpha=0.2
+                )
 
         # 設定圖表細節
         plt.xlabel('Average Erasure Probability', fontsize=12)
@@ -80,7 +139,7 @@ def plot_test_log_metrics():
         
         # 存檔
         os.makedirs("fig", exist_ok=True)
-        save_filename = f"fig/Result_{MY_CONST_NAME}_{metric}_vs_Fulfill.png"
+        save_filename = f"fig/Result_{MY_CONST_NAME}_{metric}_erasure.png"
         plt.savefig(save_filename, dpi=300)
         print(f"已儲存圖表：{save_filename}")
         plt.show()

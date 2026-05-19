@@ -444,8 +444,9 @@ def main():
         if (IS_MYOTIC): checkpoint_dir = f"{MY_CONST_NAME}_myotic_checkpoints/{run_name}"
 
         #  ========== tmp: skipping trained model
-        if os.path.exists(checkpoint_dir):
-            print(f"⚠️  detected existing pareto model at {checkpoint_dir}, skipping..")
+        model_dir = os.path.join(checkpoint_dir, "algorithm_state.pkl")
+        if os.path.exists(model_dir):
+            print(f"⚠️  detected existing pareto model at {model_dir}, skipping..")
             continue
 
         os.makedirs(checkpoint_dir, exist_ok=True)

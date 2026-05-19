@@ -104,13 +104,6 @@ for algo_label, config in ALGO_CONFIG.items():
             # 如果只有 1 個 seed，誤差半徑為 0
             if n_seeds == 1:
                 y_margin_Tx.append(0.0)
-            # else:
-            #     # 計算標準誤 (SE) = 標準差 / 根號N
-            #     se = np.std(costs, ddof=1) / np.sqrt(n_seeds)
-            #     # 取得 t-value
-            #     t_val = st.t.ppf(0.975, n_seeds - 1)
-            #     # 誤差半徑 = t-value * 標準誤
-            #     y_margin_Tx.append(t_val * se)
             else:
                 # 直接使用標準誤 (Standard Error) 作為誤差半徑
                 # 這樣陰影大小會只剩下原本 95% CI 的三分之一！

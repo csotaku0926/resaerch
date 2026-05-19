@@ -2,7 +2,8 @@ from Constellation import *
 import os
 
 STARLINK_S2 =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=90, target_k=50) # p = 36, 20
-STARLINK_NO_ISL_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=90, target_k=50, n_neighbor=0) # p = 36, 20
+STARLINK_NO_ISL_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, target_k=50, n_neighbor=0) # p = 36, 20
+STARLINK_NO_RLNC_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, target_k=20, enable_RLNC=False) # p = 36, 20
 # TELESAT =   Const_Param(alt=1000, inc=99, p=27, s=13,  t_max=90, target_k=40) # K = 10, T = 40 (too high)
 AMAZON =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50) 
 AMAZON_NO_ISL_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50, n_neighbor=0) 
@@ -33,7 +34,7 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "test_dense"
+MY_CONST_NAME = "amazon"
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
@@ -55,7 +56,7 @@ PARETO_CONFIGS = [
 ]
 
 ############# training setting ############
-IS_MYOTIC = True
+IS_MYOTIC = False
 N_TRAIN_ITER = 50
 N_USER = 40 # for training
 ERASURE = 0.1
@@ -63,15 +64,15 @@ DO_TEST_LOG = True
 
 ###########################################
 
-# TEST_MODES = ["MYOTIC"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
+TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
+# TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
 
 # set to True if checkpoint it stored in checkpoints/WTX_WCX
-TEST_PARETO = True
-TEST_ERASURE = True
+TEST_PARETO = False
+TEST_ERASURE = False
 
 
-SEED_LIST = [1, 12, 123, 1234]
+SEED_LIST = [1, 12, 123]
 #######################################################
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
 else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
@@ -94,6 +95,7 @@ PLOT_USER_NUM = 400
 # if MY_CONST_NAME == "telesat":       CONST_PARAM = TELESAT
 if MY_CONST_NAME == "starlink":   CONST_PARAM = STARLINK_S2
 elif MY_CONST_NAME == "starlink_no_isl":   CONST_PARAM = STARLINK_NO_ISL_
+elif MY_CONST_NAME == "starlink_no_rlnc":   CONST_PARAM = STARLINK_NO_RLNC_
 elif MY_CONST_NAME == 'amazon':    CONST_PARAM = AMAZON
 elif MY_CONST_NAME == 'amazon_no_isl':    CONST_PARAM = AMAZON_NO_ISL_
 elif MY_CONST_NAME == 'test_grid':      CONST_PARAM = TEST_GRID_

@@ -1,0 +1,2 @@
+
+[GREEDY] ══ erasure=0.1 ══ n_users=1  ══ seed=1 ══

@@ -16,7 +16,7 @@ except ImportError:
 data_sources = [
     {"path": "test_dense_no_rlnc_checkpoints/pareto_result.csv", "label": "No-RLNC"},
     {"path": "test_dense_no_isl_checkpoints/pareto_result.csv", "label": "No-ISL"},
-    # {"path": "test_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
+    {"path": "test_dense_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
     {"path": "test_dense_checkpoints/pareto_result.csv", "label": "Proposed (Tw=2)"},
     # {"path": "test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
     # {"path": "test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
@@ -51,7 +51,7 @@ for i, data in enumerate(data_sources):
             plt.plot(
                 df_sorted["Tx_Cost"] / df_sorted["Fulfill"] * 0.8, 
                 df_sorted["Comp_Time"] / df_sorted["Fulfill"] * 0.8, 
-                marker=markers[i], 
+                # marker=markers[i], 
                 color=colors[i], 
                 linestyle=linestyles[i], 
                 linewidth=2.5, 
