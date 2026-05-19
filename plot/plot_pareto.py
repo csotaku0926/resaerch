@@ -14,11 +14,11 @@ except ImportError:
 # 1. 定義檔案路徑與你想在圖例(Legend)上顯示的名稱
 # (你可以把 label 改成你在論文裡命名的演算法名稱，例如 "Proposed CMARL (w=3)")
 data_sources = [
-    {"path": "test_no_rlnc_checkpoints/pareto_result.csv", "label": "No-RLNC"},
-    {"path": "test_no_isl_checkpoints/pareto_result.csv", "label": "No-ISL"},
-    {"path": "test_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
-    {"path": "test_checkpoints/pareto_result.csv", "label": "Proposed (Tw=2)"},
-    {"path": "test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
+    {"path": "test_dense_no_rlnc_checkpoints/pareto_result.csv", "label": "No-RLNC"},
+    {"path": "test_dense_no_isl_checkpoints/pareto_result.csv", "label": "No-ISL"},
+    # {"path": "test_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
+    {"path": "test_dense_checkpoints/pareto_result.csv", "label": "Proposed (Tw=2)"},
+    # {"path": "test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
     # {"path": "test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
 ]
 
@@ -50,7 +50,7 @@ for i, data in enumerate(data_sources):
             # 繪製曲線
             plt.plot(
                 df_sorted["Tx_Cost"] / df_sorted["Fulfill"] * 0.8, 
-                df_sorted["Comp_Time"], 
+                df_sorted["Comp_Time"] / df_sorted["Fulfill"] * 0.8, 
                 marker=markers[i], 
                 color=colors[i], 
                 linestyle=linestyles[i], 

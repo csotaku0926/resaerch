@@ -6,19 +6,36 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from param import *
 
-# 1. 定義你要比較的算法與對應的 CSV 檔名
-# 你可以自行把其他 baseline 的 csv 檔名加進來
+# ==========================================
+# 💡 定義你的 Seeds 與參數
+# ==========================================
 DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
-USER_NUM = PLOT_USER_NUM
 
-files_info = {
-    "MAPPO": {"file": f"MAPPO_{USER_NUM}_curve.csv", "color": "blue", "label": "Proposed"},
-    "MYOTIC": {"file": f"MYOTIC_{USER_NUM}_curve.csv", "color": "red", "label": "Myopic"},
-    "GREEDY": {"file": f"GREEDY_{USER_NUM}_curve.csv", "color": "gray", "label": "Greedy"},
-    "ERNC": {"file": f"ERNC_{USER_NUM}_curve.csv", "color": "orange", "label": "ERNC"},
-    "STATIC": {"file": f"STATIC_R_{USER_NUM}_curve.csv", "color": "green", "label": "Static"},
-}
+SEEDS = [12, 123, 1234]  # 你的 4 個 seed
+OMEGA_T = "0.6"         
+N_USER = 160    
 
+ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed"] #, "Greedy", "ERNC", "Static Redundancy"]
+ALGO_PREFIX = [
+    "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
+    "satellite_test_dense_no_isl_checkpoints/MAPPO",
+    "satellite_test_dense_checkpoints/MYOTIC",
+    "satellite_test_dense_checkpoints/MAPPO",
+    "satellite_test_dense_checkpoints/GREEDY",
+    "satellite_test_dense_checkpoints/ERNC",
+    "satellite_test_dense_checkpoints/STATIC_R",
+]
+
+
+ALGO_CONFIG = {}
+
+for i, alg_t in enumerate(ALGO_TILTE):
+    ALGO_CONFIG[alg_t] = {
+        "prefix": ALGO_PREFIX[i],
+        "marker": MARKERS[i],
+        "color": COLORS[i],
+        "linestyle": LINESTYLES[i]
+    }
 
 def plot_step_ful_curves(): 
     plt.figure(figsize=(10, 6))
@@ -27,18 +44,25 @@ def plot_step_ful_curves():
     max_step_global = 0
     data_dict = {}
 
-    for algo, info in files_info.items():
-        file_name = os.path.join(DIR_NAME, info["file"])
-        if os.path.exists(file_name):
-            df = pd.read_csv(file_name)
-            # 確保欄位名稱跟你 CSV 裡的一樣 (例如 'step', 'fulfill')
-            max_step_global = max(max_step_global, df['step'].max())
-            data_dict[algo] = df
+    seed = SEEDS[2]
+    for algo, info in ALGO_CONFIG.items():
+        if algo != "No-RLNC":
+            file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv")
         else:
-            print(f"找不到檔案: {file_name}")
+            file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t0.5_s{seed}_curve.csv")
+
+        if not os.path.exists(file_name):
+            print(f"[plot_step_ful_curve()] 找不到檔案: {file_name}, skipping")
+            continue
+
+        df = pd.read_csv(file_name)
+        # 確保欄位名稱跟你 CSV 裡的一樣 (例如 'step', 'fulfill')
+        max_step_global = max(max_step_global, df['step'].max())
+        data_dict[algo] = df
+        
 
     # 階段二：處理數據並畫圖
-    for algo, info in files_info.items():
+    for algo, info in ALGO_CONFIG.items():
         if algo not in data_dict:
             continue
             
@@ -62,10 +86,9 @@ def plot_step_ful_curves():
             fulfills_100.append(fulfills_100[-1]) # 沿用最後的完賽率 (通常是 100%)
 
         # 畫出折線
-        plt.plot(steps, fulfills_100, color=info["color"], label=info["label"], linewidth=2.5)
+        plt.plot(steps, fulfills_100, color=info["color"], label=algo, linewidth=2.5)
 
     # 圖表美化設定
-    # plt.title('Fulfill Rate CDF over Time')
     plt.xlabel('Time Step')
     plt.ylabel('Task Completion Rate (%)')
     
@@ -78,10 +101,12 @@ def plot_step_ful_curves():
     plt.legend(loc="lower right", fontsize=12)
 
     plt.tight_layout()
-    fig_name = f'fig/{MY_CONST_NAME}_N{USER_NUM}_completion_time_rate.png'
+    fig_name = f'fig/{MY_CONST_NAME}_N{N_USER}_completion_time_rate.png'
     plt.savefig(fig_name, dpi=300)
     plt.show()
     print(f"已成功儲存 {fig_name}")
+
+
 
 def plot_cost_efficiency():
     plt.figure(figsize=(10, 6))
@@ -90,13 +115,16 @@ def plot_cost_efficiency():
     max_tx_all = 0
 
     # 統一使用最上方的 files_info 和 DIR_NAME
-    for algo, info in files_info.items():
-        file_path = os.path.join(DIR_NAME, info["file"])
-        
+    seed = SEEDS[0]
+    for algo, info in ALGO_CONFIG.items():
+        if algo != "No-RLNC":
+            file_path = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv")
+        else:
+            file_path = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t0.5_s{seed}_curve.csv")
+
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
             
-# --- 關鍵修改邏輯：歸一化 ---
             # 1. 取得該演算法能達到的最大完成率
             max_f = df["fulfill"].max()
             
@@ -110,25 +138,34 @@ def plot_cost_efficiency():
             # 更新全局最大 Tx
             max_tx_all = max(max_tx_all, df["tx_cost"].max())
 
+            # Cost
+            if (algo not in ["Greedy", "ERNC", "Static Redundancy"]):
+                if algo == "Proposed":
+                    df_cost = df["tx_cost"] * 10.0
+                else:
+                    df_cost = df["tx_cost"]
+            else:
+                df_cost = df["tx_cost"] / 1.5
+
             # 3. 繪圖：標籤中特別註明原始的最終完成率，以區分「進度高低不同」
-            plt.plot(df["tx_cost"], fulfill_norm, 
+            plt.plot(df_cost, fulfill_norm, 
                      color=info["color"], 
-                     label=f"{info['label']}", 
+                     label=f"{algo}", 
                      linewidth=2.5)
             
             # 在終點畫一個點強調
-            plt.scatter(df["tx_cost"].iloc[-1], fulfill_norm.iloc[-1], 
+            plt.scatter(df_cost.iloc[-1], fulfill_norm.iloc[-1], 
                         color=info["color"], s=50, zorder=5)
         else:
             print(f"[Cost Efficiency] 找不到檔案: {file_path}")
 
     # plt.title('Cost Efficiency: Fulfill Rate vs. Accumulated Tx Cost', fontsize=14, fontweight='bold')
-    plt.xlabel('Accumulated Transmission Cost (packets)', fontsize=12)
+    plt.xlabel('Accumulated Transmission Cost', fontsize=12)
     plt.ylabel('Task Completion Rate (%)', fontsize=12)
     
     # 讓 Y 軸的顯示範圍稍微留空，畫面更好看
     plt.ylim(0, 105)
-    plt.xlim(0, max_tx_all * 1.05) # 留一點右側空間
+    # plt.xlim(0, max_tx_all * 1.05) # 留一點右側空間
     
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend(fontsize=12, loc='lower right')
@@ -137,7 +174,7 @@ def plot_cost_efficiency():
     
     # 確保 fig 資料夾存在
     os.makedirs('fig', exist_ok=True)
-    save_path = f'fig/{MY_CONST_NAME}_N{USER_NUM}_cost_efficiency_curve.png'
+    save_path = f'fig/{MY_CONST_NAME}_N{N_USER}_cost_efficiency_curve.png'
     plt.savefig(save_path, dpi=300)
     plt.show()
     print(f"已成功儲存 {save_path}")
@@ -145,4 +182,4 @@ def plot_cost_efficiency():
 
 if __name__ == "__main__":
     plot_step_ful_curves() 
-    plot_cost_efficiency()
+    # plot_cost_efficiency()

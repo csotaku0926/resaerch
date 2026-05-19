@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from param import *
 
 # ==========================================
 # 1. 參數設定 (請替換成你實際使用的數值)
@@ -12,53 +13,115 @@ DIR_NAME = "satellite_test_dense_checkpoints"
 # ==========================================
 # 2. 開始整併資料
 # ==========================================
-for seed in seeds:
-    # 用來存放這一個 seed 在不同人數下的表現
-    seed_results = []
-    
-    for user_num in user_counts:
-        # 根據你的格式組裝檔名
-        # 例如: MAPPO_0.1_160_t0.6_s1234_curve.csv
-        filename = f"{DIR_NAME}/{method}_0.1_{user_num}_t0.6_s{seed}_curve.csv"
+def make_seed_Nuser_csv():
+    for seed in seeds:
+        # 用來存放這一個 seed 在不同人數下的表現
+        seed_results = []
         
-        # 檢查檔案是否存在
-        if not os.path.exists(filename):
-            print(f"⚠️ 找不到檔案: {filename}，將跳過此筆資料。")
-            continue
+        for user_num in user_counts:
+            # 根據你的格式組裝檔名
+            # 例如: MAPPO_0.1_160_t0.6_s1234_curve.csv
+            filename = f"{DIR_NAME}/{method}_0.1_{user_num}_t0.6_s{seed}_curve.csv"
             
-        # 讀取曲線 CSV
-        df = pd.read_csv(filename)
-        
-        # 防呆：確保檔案內有資料
-        if df.empty:
-            print(f"⚠️ 檔案為空: {filename}，將跳過此筆資料。")
-            continue
+            # 檢查檔案是否存在
+            if not os.path.exists(filename):
+                print(f"⚠️ 找不到檔案: {filename}，將跳過此筆資料。")
+                continue
+                
+            # 讀取曲線 CSV
+            df = pd.read_csv(filename)
             
-        # 取得最後一個 step 的那一行 (即最後一列)
-        last_row = df.iloc[-1]
+            # 防呆：確保檔案內有資料
+            if df.empty:
+                print(f"⚠️ 檔案為空: {filename}，將跳過此筆資料。")
+                continue
+                
+            # 取得最後一個 step 的那一行 (即最後一列)
+            last_row = df.iloc[-1]
+            
+            # 提取我們要的指標，並加入清單
+            seed_results.append({
+                "User_Num": user_num,
+                "Comp_Time": last_row["step"],      # 最後一個 step 作為 Completion Time
+                "Tx_Cost": last_row["tx_cost"],
+                "Fulfill": last_row["fulfill"]
+            })
         
-        # 提取我們要的指標，並加入清單
-        seed_results.append({
-            "User_Num": user_num,
-            "Comp_Time": last_row["step"],      # 最後一個 step 作為 Completion Time
-            "Tx_Cost": last_row["tx_cost"],
-            "Fulfill": last_row["fulfill"]
-        })
-    
-    # ==========================================
-    # 3. 將這個 seed 的結果輸出成新的 CSV
-    # ==========================================
-    if seed_results:
-        # 將字典列表轉換為 DataFrame
-        summary_df = pd.DataFrame(seed_results)
-        
-        # 根據人數由小到大排序 (確保圖表或閱讀順序正確)
-        summary_df = summary_df.sort_values(by="User_Num")
-        
-        # 匯出成新的 CSV
-        output_filename = f"{DIR_NAME}/{method}_summary_s{seed}.csv"
-        summary_df.to_csv(output_filename, index=False)
-        
-        print(f"✅ 成功生成統整檔案: {output_filename}")
-    else:
-        print(f"❌ Seed {seed} 沒有找到任何有效的檔案，無法生成統整檔。")
+        # ==========================================
+        # 3. 將這個 seed 的結果輸出成新的 CSV
+        # ==========================================
+        if seed_results:
+            # 將字典列表轉換為 DataFrame
+            summary_df = pd.DataFrame(seed_results)
+            
+            # 根據人數由小到大排序 (確保圖表或閱讀順序正確)
+            summary_df = summary_df.sort_values(by="User_Num")
+            
+            # 匯出成新的 CSV
+            output_filename = f"{DIR_NAME}/{method}_summary_s{seed}.csv"
+            summary_df.to_csv(output_filename, index=False)
+            
+            print(f"✅ 成功生成統整檔案: {output_filename}")
+        else:
+            print(f"❌ Seed {seed} 沒有找到任何有效的檔案，無法生成統整檔。")
+
+
+def make_pareto_csv():
+
+    DIRS = [
+        "test_dense_checkpoints", 
+        "test_dense_myotic_checkpoints",
+        "test_dense_no_isl_checkpoints",
+        "test_dense_no_rlnc_checkpoints",
+    ]
+
+    for dir in DIRS:
+        result_file = f"{dir}/pareto_result.csv"
+        results = []
+
+        for p_config in PARETO_CONFIGS:
+            w_t = p_config["omega_t"]
+            w_c = p_config["omega_c"]
+            run_name = f"WT{int(w_t * 10)}_WC{int(w_c * 10)}"
+
+            filename = f"{dir}/{run_name}/training_log.csv"
+
+            # 檢查檔案是否存在
+            if not os.path.exists(filename):
+                print(f"⚠️ 找不到檔案: {filename}，將跳過此筆資料。")
+                continue
+                
+            # 讀取曲線 CSV
+            try:
+                df = pd.read_csv(filename)
+            except pd.errors.EmptyDataError:
+                print(f"⚠️ 檔案為空: {filename}，將跳過此筆資料。")
+                continue
+
+            
+
+            # ==========================================
+            # 【修改重點】：擷取最後 10 行並取平均
+            # ==========================================
+            last_10_mean = df.tail(10).mean(numeric_only=True)
+            
+            # 提取我們要的指標，並加入清單
+            results.append({
+                "omega_t": w_t,
+                "omega_c": w_c,
+                "Comp_Time": last_10_mean["Comp_Time"],
+                "Tx_Cost": last_10_mean["Tx_Cost"],
+                "Fulfill": 1 - last_10_mean["Cost_Rate"]
+            })
+
+        if results:
+            # 將字典列表轉換為 DataFrame
+            summary_df = pd.DataFrame(results)
+
+            summary_df = summary_df.sort_values(by="omega_t",ascending=False)
+            
+            # 匯出成新的 CSV
+            summary_df.to_csv(result_file, index=False)
+
+if __name__ == '__main__':
+    make_pareto_csv()

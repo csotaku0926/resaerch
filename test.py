@@ -24,10 +24,10 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [1, 40, 80, 120, 160]
+USER_NUMBERS = [80] #[1, 40, 80, 120, 160]
 # ERASURES = [0.2]
 # USER_NUMBERS = [100, 200, 300, 400]
-ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
+ERASURES = [0.2, 0.3, 0.4] #[0.1, 0.2, 0.3, 0.4]
 NUM_EPISODES = 3
 T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
@@ -213,7 +213,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
 
     if write_log:
         os.makedirs(checkpoint_dir, exist_ok=True)
-        log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log.csv")
+        if TEST_ERASURE: log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log_erasure.csv")
+        else: log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log.csv")
+
         csv_file = open(log_file_path, "w", newline="")
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure"])
@@ -221,9 +223,9 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
     for era in ERASURES:
 
         for n_users in user_numbers:
-            print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══")
+            print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══ seed={seed} ══")
             with open(log_txt_file, "a") as f:
-                f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══\n")
+                f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users}  ══ seed={seed} ══\n")
 
             if write_curve:
                 curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_t{omega_t}_s{seed}_curve.csv")
