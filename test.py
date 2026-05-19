@@ -24,11 +24,11 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [80] #[1, 40, 80, 120, 160]
+USER_NUMBERS = [1, 40, 80, 120, 160]
 # ERASURES = [0.2]
 # USER_NUMBERS = [100, 200, 300, 400]
-ERASURES = [0.4] #[0.1, 0.2, 0.3, 0.4]
-NUM_EPISODES = 3
+ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
+NUM_EPISODES = 2
 T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")

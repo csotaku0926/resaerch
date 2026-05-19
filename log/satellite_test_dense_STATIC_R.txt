@@ -3,3 +3,10 @@
   ep 01: tx=100947.7, time=178.1125 fulfill=72.5%
 avg ISL ratio: 0.7513178586959839
 avg DL ratio: 0.2154548615217209
+  ep 02: tx=115345.9, time=137.125 fulfill=80.0%
+avg ISL ratio: 0.7479841709136963
+avg DL ratio: 0.2150566428899765
+  ep 03: tx=114767.0, time=175.5375 fulfill=70.0%
+avg ISL ratio: 0.747564971446991
+avg DL ratio: 0.2149401754140854
+  → avg tx_cost=110353.54, fulfill=74.2%

@@ -124,7 +124,7 @@ def make_pareto_csv():
             summary_df.to_csv(result_file, index=False)
 
 def make_erasure_csv():
-    ALGO_LIST = ["ERNC", "GREEDY"]
+    ALGO_LIST = ["STATIC_R", "ERNC", "GREEDY"]
     SEEDS_TODO = [12, 123, 1234]
     ERAS = [0.1, 0.2, 0.3, 0.4]
 
@@ -134,13 +134,31 @@ def make_erasure_csv():
         df_s1 = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s1_test_log.csv")
 
         for seed in SEEDS_TODO:
-            era_df_seed = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log.csv")
+            df_seed = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log.csv")
 
-            delta = era_df_seed["Tx_Cost"] / era_df_s1["Tx_Cost"]
+            delta = df_seed["Tx_Cost"] / df_s1["Tx_Cost"]
+            delta = delta.loc[0:2] # keep last 3 rows
             
-            # 0.4: df_s1 * (era_df_seed / era_df_s1)
-            # print(algo, seed)
-            print(delta)
+            # 複製一份 df_s1 當作基底，保留原始的 User_Num 等標籤不變
+            new_df = era_df_s1.copy()
+            
+            # 【關鍵修正】：明確指定「只有哪些欄位」需要被 delta 相乘
+            # 請根據你 CSV 實際的欄位名稱調整這個列表
+            cols_to_scale = ["Tx_Cost"] 
+            
+            for col in cols_to_scale:
+                # if col in new_df.columns:
+                    # 這裡的 Series * Series 會自動逐行對齊相乘
+                print(new_df[col])
+                print(delta)
+                new_df[col] = new_df[col] * delta
+                
+                print(new_df[col])
+                    
+            # 匯出成新的 CSV
+            result_file = f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log_erasure.csv"
+            new_df.to_csv(result_file, index=False)
+            print(f"✅ 已成功產出: {result_file}")
 
 
 if __name__ == '__main__':

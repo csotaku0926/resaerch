@@ -20,8 +20,9 @@ data_sources = [
     {"prefix": "satellite_test_dense_no_isl_checkpoints/MAPPO", "label": "No-ISL"},
     {"prefix": "satellite_test_dense_checkpoints/MYOTIC", "label": "Myopic"},
     {"prefix": "satellite_test_dense_checkpoints/MAPPO", "label": "Proposed (Tw=2)"},
-    # {"prefix": "satellite_test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
-    # {"prefix": "satellite_test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
+    {"prefix": "satellite_test_dense_checkpoints/GREEDY", "label": "Greedy"},
+    {"prefix": "satellite_test_dense_checkpoints/ERNC", "label": "ERNC"},
+    {"prefix": "satellite_test_dense_checkpoints/STATIC_R", "label": "Static Redundancy"},
 ]
 
 
