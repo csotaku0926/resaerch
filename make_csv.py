@@ -123,5 +123,25 @@ def make_pareto_csv():
             # 匯出成新的 CSV
             summary_df.to_csv(result_file, index=False)
 
+def make_erasure_csv():
+    ALGO_LIST = ["ERNC", "GREEDY"]
+    SEEDS_TODO = [12, 123, 1234]
+    ERAS = [0.1, 0.2, 0.3, 0.4]
+
+    for algo in ALGO_LIST:
+
+        era_df_s1 = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s1_test_log_erasure.csv")
+        df_s1 = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s1_test_log.csv")
+
+        for seed in SEEDS_TODO:
+            era_df_seed = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log.csv")
+
+            delta = era_df_seed["Tx_Cost"] / era_df_s1["Tx_Cost"]
+            
+            # 0.4: df_s1 * (era_df_seed / era_df_s1)
+            # print(algo, seed)
+            print(delta)
+
+
 if __name__ == '__main__':
-    make_pareto_csv()
+    make_erasure_csv()

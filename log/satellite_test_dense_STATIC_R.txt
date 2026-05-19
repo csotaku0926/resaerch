@@ -1,5 +1,5 @@
 
-[STATIC_R] ══ erasure=0.2 ══ n_users=80  ══ seed=1 ══
-  ep 01: tx=104247.5, time=161.975 fulfill=76.2%
-avg ISL ratio: 0.7505834698677063
-avg DL ratio: 0.2153559923171997
+[STATIC_R] ══ erasure=0.4 ══ n_users=80  ══ seed=1 ══
+  ep 01: tx=100947.7, time=178.1125 fulfill=72.5%
+avg ISL ratio: 0.7513178586959839
+avg DL ratio: 0.2154548615217209

@@ -24,10 +24,10 @@ from train_lstm import *
 from param import *
 
 # ── 執行設定 ──────────────────────────────────────
-USER_NUMBERS = [1, 40, 80, 120, 160]
+USER_NUMBERS = [80] #[1, 40, 80, 120, 160]
 # ERASURES = [0.2]
 # USER_NUMBERS = [100, 200, 300, 400]
-ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
+ERASURES = [0.4] #[0.1, 0.2, 0.3, 0.4]
 NUM_EPISODES = 3
 T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
@@ -216,9 +216,11 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
         if TEST_ERASURE: log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log_erasure.csv")
         else: log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log.csv")
 
-        csv_file = open(log_file_path, "w", newline="")
+        csv_file = open(log_file_path, "a", newline="")
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure"])
+        # check if the file exists and not have words inside
+        if csv_file.tell() == 0:
+            csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure"])
 
     for era in ERASURES:
 
