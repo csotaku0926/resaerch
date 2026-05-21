@@ -1,0 +1,18 @@
+
+[MAPPO] ══ erasure=0.1 ══ n_users=1  ══ seed=123 ══
+  ep 01: tx=1187.7, time=66.5 fulfill=80.0%
+avg ISL ratio: 0.6137569546699524
+avg DL ratio: 0.2666737735271454
+  ep 02: tx=2494.6, time=109.4 fulfill=60.0%
+avg ISL ratio: 0.6068468689918518
+avg DL ratio: 0.23264695703983307
+  → avg tx_cost=1841.15, fulfill=70.0%
+[MAPPO] ══ erasure=0.1 ══ n_users=40  ══ seed=123 ══
+  ep 01: tx=1892.5, time=64.225 fulfill=80.0%
+avg ISL ratio: 0.49680808186531067
+avg DL ratio: 0.23481124639511108
+  ep 02: tx=2102.5, time=141.725 fulfill=60.0%
+avg ISL ratio: 0.48404738306999207
+avg DL ratio: 0.20992609858512878
+  → avg tx_cost=1997.47, fulfill=70.0%
+[MAPPO] ══ erasure=0.1 ══ n_users=80  ══ seed=123 ══

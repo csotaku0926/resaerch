@@ -1,0 +1,5 @@
+
+[MAPPO] ══ erasure=0.1 ══ n_users=1  ══ seed=12 ══
+  ep 01: tx=495.2, time=241.2 fulfill=20.0%
+avg ISL ratio: 0.29738977551460266
+avg DL ratio: 0.4263853430747986

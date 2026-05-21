@@ -17,7 +17,7 @@ data_sources = [
     {"path": "test_dense_no_rlnc_checkpoints/pareto_result.csv", "label": "No-RLNC"},
     {"path": "test_dense_no_isl_checkpoints/pareto_result.csv", "label": "No-ISL"},
     {"path": "test_dense_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
-    {"path": "test_dense_checkpoints/pareto_result.csv", "label": "Proposed (Tw=2)"},
+    {"path": "test_dense_checkpoints/pareto_result.csv", "label": "Proposed"},
     # {"path": "test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
     # {"path": "test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
 ]
@@ -64,30 +64,30 @@ for i, data in enumerate(data_sources):
 # ==========================================
 # 2. 加入 Greedy Baseline 的單一座標點 (點)
 # ==========================================
-greedy_path = f"satellite_test_checkpoints/GREEDY_test_log.csv"
-if os.path.exists(greedy_path):
-    greedy_df = pd.read_csv(greedy_path)
+# greedy_path = f"satellite_test_checkpoints/GREEDY_test_log.csv"
+# if os.path.exists(greedy_path):
+#     greedy_df = pd.read_csv(greedy_path)
     
     # 提取 Greedy 測試結果的單一數值
     # 使用 .iloc[0] 確保即使檔案有多行也只取第一筆 (或者你也可以用 .mean() 取平均)
-    greedy_tx_cost = greedy_df['Tx_Cost'].iloc[0] 
-    greedy_comp_time = greedy_df['Comp_Time'].iloc[0]
-    ful_factor = 0.8 / greedy_df['Fulfill'].iloc[0]
+    # greedy_tx_cost = greedy_df['Tx_Cost'].iloc[0] 
+    # greedy_comp_time = greedy_df['Comp_Time'].iloc[0]
+    # ful_factor = 0.8 / greedy_df['Fulfill'].iloc[0]
     
-    # 使用 scatter 畫出一個醒目的單點
-    plt.scatter(
-        greedy_tx_cost * ful_factor, 
-        greedy_comp_time * ful_factor, 
-        color='red',           # 紅色
-        marker='*',            # 星形
-        s=300,                 # s 控制點的大小，300 很大很醒目
-        edgecolors='black',    # 加個黑邊框更有質感
-        label='Greedy Baseline', 
-        zorder=5               # zorder=5 確保這個點絕對壓在所有線條的最上層
-    )
-    print(f"✅ 成功讀取 Greedy 資料點: (Cost: {greedy_tx_cost:.1f}, Time: {greedy_comp_time:.1f})")
-else:
-    print(f"⚠️ 警告: 找不到檔案 {greedy_path}，將跳過繪製 Greedy 點。")
+    # # 使用 scatter 畫出一個醒目的單點
+    # plt.scatter(
+    #     greedy_tx_cost * ful_factor, 
+    #     greedy_comp_time * ful_factor, 
+    #     color='red',           # 紅色
+    #     marker='*',            # 星形
+    #     s=300,                 # s 控制點的大小，300 很大很醒目
+    #     edgecolors='black',    # 加個黑邊框更有質感
+    #     label='Greedy Baseline', 
+    #     zorder=5               # zorder=5 確保這個點絕對壓在所有線條的最上層
+    # )
+    # print(f"✅ 成功讀取 Greedy 資料點: (Cost: {greedy_tx_cost:.1f}, Time: {greedy_comp_time:.1f})")
+# else:
+#     print(f"⚠️ 警告: 找不到檔案 {greedy_path}，將跳過繪製 Greedy 點。")
 
 # 3. 美化圖表外觀
 # plt.title('Energy-Latency Pareto Frontier', fontsize=16, fontweight='bold', pad=15)

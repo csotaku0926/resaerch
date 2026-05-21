@@ -6,7 +6,8 @@ STARLINK_NO_ISL_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, tar
 STARLINK_NO_RLNC_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, target_k=20, enable_RLNC=False) # p = 36, 20
 # TELESAT =   Const_Param(alt=1000, inc=99, p=27, s=13,  t_max=90, target_k=40) # K = 10, T = 40 (too high)
 AMAZON =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50) 
-AMAZON_NO_ISL_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50, n_neighbor=0) 
+AMAZON_NO_ISL_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50, n_neighbor=0)
+AMAZON_NO_RLNC_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=300, target_k=20, enable_RLNC=False) 
 
 TEST_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30) # p = 13, s = 10
 TEST_W3_ =         Const_Param(alt=540.0, inc=53.2, p=3, s=10,  t_max=200, target_k=30, Tw=3) # p = 13, s = 10
@@ -20,7 +21,9 @@ TEST4_ =        Const_Param(alt=540.0, inc=53.2, p=6, s=10,  t_max=90, target_k=
 TEST4_NO_ISL_ =        Const_Param(alt=540.0, inc=53.2, p=6, s=10,  t_max=90, target_k=30, n_neighbor=0)
 TEST4_NO_RLNC_ =        Const_Param(alt=540.0, inc=53.2, p=6, s=10,  t_max=300, target_k=20, enable_RLNC=False)
 # TEST_H550_ =   Const_Param(alt=550, inc=53, p=3, s=22,  t_max=90, target_k=30) # MAPPO train better
-TEST_DENSE_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300, target_k=50) # MYOTIC better..
+TEST_DENSE_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300, target_k=50)
+TEST_DENSE_W4_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300, target_k=50, Tw=4) 
+TEST_DENSE_W8_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=200, target_k=50, Tw=8) 
 TEST_DENSE_NO_ISL_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=500, target_k=50, n_neighbor=0)
 TEST_DENSE_NO_RLNC_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300, target_k=20, enable_RLNC=False)
 TEST_GRID_ =   Const_Param(alt=550, inc=53, p=3, s=22,  t_max=90, target_k=30, grid_scale=15) # MAPPO train better
@@ -34,14 +37,14 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "starlink_no_isl"
+MY_CONST_NAME = "test_dense_w8"
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
     # {"omega_t": 1.0, "omega_c": 0.0}, # 極端求快
-    # {"omega_t": 0.8, "omega_c": 0.2},  # dense settings
     # {"omega_t": 0.9, "omega_c": 0.1},   # dense
     {"omega_t": 0.6, "omega_c": 0.4}, # Exp1. setting
+    # {"omega_t": 0.8, "omega_c": 0.2},  # dense settings
     # {"omega_t": 0.7, "omega_c": 0.3},
     # {"omega_t": 0.95, "omega_c": 0.05}, 
     # {"omega_t": 0.85, "omega_c": 0.15}, 
@@ -65,14 +68,14 @@ DO_TEST_LOG = True
 ###########################################
 
 TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-# TEST_MODES = ["STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
+# TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
 
 # set to True if checkpoint it stored in checkpoints/WTX_WCX
 TEST_PARETO = True
 TEST_ERASURE = False
 
 
-SEED_LIST = [1, 12, 123, 1234]
+SEED_LIST = [12, 123, 1234]
 #######################################################
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
 else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
@@ -98,6 +101,7 @@ elif MY_CONST_NAME == "starlink_no_isl":   CONST_PARAM = STARLINK_NO_ISL_
 elif MY_CONST_NAME == "starlink_no_rlnc":   CONST_PARAM = STARLINK_NO_RLNC_
 elif MY_CONST_NAME == 'amazon':    CONST_PARAM = AMAZON
 elif MY_CONST_NAME == 'amazon_no_isl':    CONST_PARAM = AMAZON_NO_ISL_
+elif MY_CONST_NAME == 'amazon_no_rlnc':    CONST_PARAM = AMAZON_NO_RLNC_
 elif MY_CONST_NAME == 'test_grid':      CONST_PARAM = TEST_GRID_
 elif MY_CONST_NAME == 'test4':      CONST_PARAM = TEST4_
 elif MY_CONST_NAME == 'test4_no_isl':      CONST_PARAM = TEST4_NO_ISL_
@@ -108,6 +112,8 @@ elif MY_CONST_NAME == 'test_no_isl':      CONST_PARAM = TEST_NO_ISL_
 elif MY_CONST_NAME == 'test_no_rlnc':      CONST_PARAM = TEST_NO_RLNC_
 elif MY_CONST_NAME == 'test_hard':      CONST_PARAM = TEST_HARD_
 elif MY_CONST_NAME == 'test_dense':         CONST_PARAM = TEST_DENSE_
+elif MY_CONST_NAME == 'test_dense_w4':         CONST_PARAM = TEST_DENSE_W4_
+elif MY_CONST_NAME == 'test_dense_w8':         CONST_PARAM = TEST_DENSE_W8_
 elif MY_CONST_NAME == 'test_dense_no_isl':         CONST_PARAM = TEST_DENSE_NO_ISL_
 elif MY_CONST_NAME == 'test_dense_no_rlnc':         CONST_PARAM = TEST_DENSE_NO_RLNC_
 elif MY_CONST_NAME == 'test_erasure':         CONST_PARAM = TEST_ERASURE_

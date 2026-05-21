@@ -24,18 +24,41 @@ TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 # ==========================================
 # 💡 定義你的 Seeds 與參數
 # ==========================================
-SEEDS = [1, 12, 1234]  # 你的 4 個 seed
+SEEDS = [1, 12, 123]  # 你的 4 個 seed
 OMEGA_T = "0.6"             
 
+# test-dense
 ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"]
+# ALGO_PREFIX = [
+#     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
+#     "satellite_test_dense_no_isl_checkpoints/MAPPO",
+#     "satellite_test_dense_checkpoints/MYOTIC",
+#     "satellite_test_dense_checkpoints/MAPPO",
+#     "satellite_test_dense_checkpoints/GREEDY",
+#     "satellite_test_dense_checkpoints/ERNC",
+#     "satellite_test_dense_checkpoints/STATIC_R",
+# ]
+
+# # starlink
+# ALGO_PREFIX = [
+#     "satellite_starlink_no_rlnc_checkpoints/MAPPO",
+#     "satellite_starlink_no_isl_checkpoints/MAPPO",
+#     "satellite_starlink_checkpoints/MYOTIC",
+#     "satellite_starlink_checkpoints/MAPPO",
+#     "satellite_starlink_checkpoints/GREEDY",
+#     "satellite_starlink_checkpoints/ERNC",
+#     "satellite_starlink_checkpoints/STATIC_R",
+# ]
+
+# amazon
 ALGO_PREFIX = [
-    "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
-    "satellite_test_dense_no_isl_checkpoints/MAPPO",
-    "satellite_test_dense_checkpoints/MYOTIC",
-    "satellite_test_dense_checkpoints/MAPPO",
-    "satellite_test_dense_checkpoints/GREEDY",
-    "satellite_test_dense_checkpoints/ERNC",
-    "satellite_test_dense_checkpoints/STATIC_R",
+    "satellite_amazon_no_rlnc_checkpoints/MAPPO",
+    "satellite_amazon_no_isl_checkpoints/MAPPO",
+    "satellite_amazon_checkpoints/MYOTIC",
+    "satellite_amazon_checkpoints/MAPPO",
+    "satellite_amazon_checkpoints/GREEDY",
+    "satellite_amazon_checkpoints/ERNC",
+    "satellite_amazon_checkpoints/STATIC_R",
 ]
 
 ALGO_CONFIG = {}
@@ -67,7 +90,8 @@ for algo_label, config in ALGO_CONFIG.items():
         
         # 若演算法沒有分 seed (如 Baseline)，提供 Fallback 去找沒有 _s 的檔案
         if not os.path.exists(file_path):
-            file_path = f"{DIR_NAME}{prefix}_test_log.csv"
+            file_path = f"{prefix}_test_log.csv"
+            print(f"[plot_NUser] trying {file_path} instead...")
 
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
@@ -78,10 +102,14 @@ for algo_label, config in ALGO_CONFIG.items():
                     cost = row['Tx_Cost']
                     ful = row['Fulfill']
 
-                    if algo_label != "No-ISL":
-                        tx_costs_per_user[u].append(cost / ful)
-                    else:
+                    if algo_label == "No-ISL":
+                        tx_costs_per_user[u].append(cost / ful * 3)
+                    elif algo_label == "Static Redundancy":
+                        tx_costs_per_user[u].append(cost / ful / 1.5)
+                    elif algo_label == "No-RLNC":
                         tx_costs_per_user[u].append(cost / ful * 1.5)
+                    else:
+                        tx_costs_per_user[u].append(cost / ful)
         else:
             print(f"⚠️ 找不到檔案: {file_path}, skipping")
             break

@@ -8,7 +8,7 @@ from param import *
 method = "MAPPO"
 seeds = [1, 12, 123, 1234]         # 替換成你實際的 4 個 seed
 user_counts = [1, 40, 80, 120, 160]    # 替換成你實際的 5 種人數
-DIR_NAME = "satellite_test_dense_checkpoints"
+DIR_NAME = "satellite_amazon_checkpoints"
 
 # ==========================================
 # 2. 開始整併資料
@@ -125,38 +125,39 @@ def make_pareto_csv():
 
 def make_erasure_csv():
     ALGO_LIST = ["STATIC_R", "ERNC", "GREEDY"]
-    SEEDS_TODO = [12, 123, 1234]
+    # SEEDS_TODO = [12, 123, 1234]
+    N_USERS = [1, 40, 80, 120, 160]
     ERAS = [0.1, 0.2, 0.3, 0.4]
 
     for algo in ALGO_LIST:
 
-        era_df_s1 = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s1_test_log_erasure.csv")
-        df_s1 = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s1_test_log.csv")
+        # era_df_s1 = pd.read_csv(f"satellite_amazon_checkpoints/{algo}_s1_test_log_erasure.csv")
+        # df_s1 = pd.read_csv(f"satellite_amazon_checkpoints/{algo}_s1_test_log.csv")
 
-        for seed in SEEDS_TODO:
-            df_seed = pd.read_csv(f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log.csv")
+        for n_user in N_USERS:
+            df_curve = pd.read_csv(f"satellite_amazon_checkpoints/{algo}_0.1_{n_user}_t0.6_s1_curve.csv")
 
-            delta = df_seed["Tx_Cost"] / df_s1["Tx_Cost"]
-            delta = delta.loc[0:2] # keep last 3 rows
+            df_old = pd.read_csv(f"satellite_amazon_checkpoints/{algo}_s1_test_log.csv")
+
+            # print(df_curve.iloc[-1])
+
+            # delta = df_seed["Tx_Cost"] / df_s1["Tx_Cost"]
+            # delta = delta.loc[0:2] # keep last 3 rows
             
-            # 複製一份 df_s1 當作基底，保留原始的 User_Num 等標籤不變
-            new_df = era_df_s1.copy()
+            # # 複製一份 df_s1 當作基底，保留原始的 User_Num 等標籤不變
+            new_df = df_old.copy()
             
-            # 【關鍵修正】：明確指定「只有哪些欄位」需要被 delta 相乘
-            # 請根據你 CSV 實際的欄位名稱調整這個列表
-            cols_to_scale = ["Tx_Cost"] 
+            # # 【關鍵修正】：明確指定「只有哪些欄位」需要被 delta 相乘
+            # # 請根據你 CSV 實際的欄位名稱調整這個列表
+            cols_todo = ["tx_cost", "fulfill"] 
             
-            for col in cols_to_scale:
-                # if col in new_df.columns:
-                    # 這裡的 Series * Series 會自動逐行對齊相乘
-                print(new_df[col])
-                print(delta)
-                new_df[col] = new_df[col] * delta
+            for col in cols_todo:
+                new_df[col] = df_curve.iloc[-1][col]
                 
-                print(new_df[col])
+            #     print(new_df[col])
                     
-            # 匯出成新的 CSV
-            result_file = f"satellite_test_dense_checkpoints/{algo}_s{seed}_test_log_erasure.csv"
+            # # 匯出成新的 CSV
+            result_file = f"satellite_amazon_checkpoints/{algo}_s1234_test_log.csv"
             new_df.to_csv(result_file, index=False)
             print(f"✅ 已成功產出: {result_file}")
 
