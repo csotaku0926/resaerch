@@ -236,7 +236,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                 curve_csv_writer.writerow(["step", "tx_cost", "fulfill"])
 
             raw_env = SatelliteDataDisseminationEnv(
-                const_param=CONST_PARAM, T_max=T_MAX, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
+                const_param=CONST_PARAM, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
                 erasure=era,
                 is_unicast=(not (mode == "MAPPO" or mode == "MYOTIC")),
                 omega_t=omega_t, omega_c=omega_c, seed=seed
@@ -264,8 +264,6 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                 done          = False
                 final_tx_cost = 0.0
                 current_ep_curve = []
-
-                # print([u.pos for u in actual_env.constellation.user_grids[0].users])
 
                 while not done:
                     current_time = current_skyfield_time(actual_env)
@@ -403,8 +401,7 @@ def main():
                     def env_creator(cfg):
                         return ParallelPettingZooEnv(
                             SatelliteDataDisseminationEnv(
-                                const_param=CONST_PARAM, 
-                                T_max=T_MAX, 
+                                const_param=CONST_PARAM,
                                 num_users=cfg.get("num_users", 80),
                                 erasure=cfg.get("erasure", 0.1),    
                                 test_mode=IS_TEST_MODE,
@@ -418,7 +415,7 @@ def main():
                     def env_creator(cfg):
                         return ParallelPettingZooEnv(
                             SatelliteDataDisseminationEnv(
-                                const_param=CONST_PARAM, T_max=T_MAX, 
+                                const_param=CONST_PARAM, 
                                 num_users=cfg.get("num_users", 80),
                                 erasure=cfg.get("erasure", 0.1),    
                                 is_myotic=True, 

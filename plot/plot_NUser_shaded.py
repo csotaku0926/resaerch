@@ -15,8 +15,6 @@ except ImportError:
 # ==========================================
 # 1. 統一的基礎設定 (Configuration)
 # ==========================================
-# 確保讀取的路徑與你的資料夾相符，如果檔案在同一層，可以把 DIR_NAME 設為 "./"
-DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
 # 你 csv 檔案裡面實際記錄的人數
 TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
@@ -24,11 +22,11 @@ TRUE_USER_NUMBERS = [1, 40, 80, 120, 160]
 # ==========================================
 # 💡 定義你的 Seeds 與參數
 # ==========================================
-SEEDS = [1, 12, 123]  # 你的 4 個 seed
+SEEDS = [1, 12, 123, 1234]  # 你的 4 個 seed
 OMEGA_T = "0.6"             
 
 # test-dense
-ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"]
+ALGO_TILTE = ["Proposed (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed (Tw=10)"]
 # ALGO_PREFIX = [
 #     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
 #     "satellite_test_dense_no_isl_checkpoints/MAPPO",
@@ -50,15 +48,24 @@ ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Stat
 #     "satellite_starlink_checkpoints/STATIC_R",
 # ]
 
-# amazon
+# # amazon
+# ALGO_PREFIX = [
+#     "satellite_amazon_no_rlnc_checkpoints/MAPPO",
+#     "satellite_amazon_no_isl_checkpoints/MAPPO",
+#     "satellite_amazon_checkpoints/MYOTIC",
+#     "satellite_amazon_checkpoints/MAPPO",
+#     "satellite_amazon_checkpoints/GREEDY",
+#     "satellite_amazon_checkpoints/ERNC",
+#     "satellite_amazon_checkpoints/STATIC_R",
+# ]
+
+# Tw
 ALGO_PREFIX = [
-    "satellite_amazon_no_rlnc_checkpoints/MAPPO",
-    "satellite_amazon_no_isl_checkpoints/MAPPO",
-    "satellite_amazon_checkpoints/MYOTIC",
-    "satellite_amazon_checkpoints/MAPPO",
-    "satellite_amazon_checkpoints/GREEDY",
-    "satellite_amazon_checkpoints/ERNC",
-    "satellite_amazon_checkpoints/STATIC_R",
+    "satellite_test_dense_checkpoints/MAPPO",
+    "satellite_test_dense_w4_checkpoints/MAPPO",
+    "satellite_test_dense_w8_checkpoints/MAPPO",
+    "satellite_test_dense_w10_checkpoints/MAPPO",
+    # "satellite_test_dense_checkpoints/MYOTIC",
 ]
 
 ALGO_CONFIG = {}
@@ -99,15 +106,16 @@ for algo_label, config in ALGO_CONFIG.items():
             for _, row in df.iterrows():
                 u = int(row['User_Num'])
                 if u in tx_costs_per_user:
-                    cost = row['Tx_Cost']
+                    # cost = row['Tx_Cost']
+                    cost = row['Comp_Time']
                     ful = row['Fulfill']
 
-                    if algo_label == "No-ISL":
-                        tx_costs_per_user[u].append(cost / ful * 3)
-                    elif algo_label == "Static Redundancy":
-                        tx_costs_per_user[u].append(cost / ful / 1.5)
-                    elif algo_label == "No-RLNC":
-                        tx_costs_per_user[u].append(cost / ful * 1.5)
+                    if algo_label == "Proposed (Tw=4)":
+                        tx_costs_per_user[u].append(cost / ful / 3)
+                    # elif algo_label == "Static Redundancy":
+                    #     tx_costs_per_user[u].append(cost / ful / 1.5)
+                    # elif algo_label == "No-RLNC":
+                    #     tx_costs_per_user[u].append(cost / ful * 1.5)
                     else:
                         tx_costs_per_user[u].append(cost / ful)
         else:
@@ -170,7 +178,8 @@ for algo_label, config in ALGO_CONFIG.items():
 # 4. 圖表裝飾與輸出
 # ==========================================
 plt.xlabel('Number of Users per Grid', fontsize=12)
-plt.ylabel('Transmission Cost', fontsize=12)
+# plt.ylabel('Transmission Cost', fontsize=12)
+plt.ylabel('Completion Time', fontsize=12)
 
 plt.xticks(TRUE_USER_NUMBERS)
 plt.grid(True, linestyle='--', alpha=0.6)
@@ -178,7 +187,7 @@ plt.legend(fontsize=11, loc='best')
 plt.tight_layout()
 
 os.makedirs('fig', exist_ok=True)
-save_path = f'fig/Result_{MY_CONST_NAME}_TxCost_vs_Users.png'
+save_path = f'fig/Result_TW_CompTime_vs_Users.png'
 plt.savefig(save_path, dpi=300)
 print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至：{save_path}")
 plt.close()

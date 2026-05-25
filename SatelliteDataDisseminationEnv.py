@@ -9,14 +9,14 @@ from param import *
 class SatelliteDataDisseminationEnv(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "satellite_nc_v0"}
 
-    def __init__(self, const_param: Const_Param, num_grids=1, T_max=90, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
+    def __init__(self, const_param: Const_Param, num_grids=1, num_users=10, lambda_w=0, target_k=20, erasure=0.1,
                  is_unicast=False, is_ORNC=False, is_ERNC=False, is_myotic=False, step_seconds=10, test_mode=False, use_deficit=False,
                  omega_t=0.5, omega_c=0.5, seed=1234):
         super().__init__()
 
         # 1. 定義 param
         self.e = 0.2         # reliability constraint: Pr(T > T_max) <= e
-        self.T_max = T_max         # max time step (truncation)
+        self.T_max = const_param.t_max         # max time step (truncation)
         
         self.M = const_param.n_neighbor  # 鄰居數量 (Intra-tier)
         self.G = num_grids      # 覆蓋網格數量 (Inter-tier)
@@ -37,10 +37,11 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         self.grid_scale = const_param.grid_scale
         self.seed = seed
+        self.num_users = num_users
 
         self.constellation = Constellation(
             param=const_param, 
-            t_max=T_max, 
+            t_max=self.T_max, 
             num_users=num_users, 
             target_k=target_k, 
             step_seconds=step_seconds,
