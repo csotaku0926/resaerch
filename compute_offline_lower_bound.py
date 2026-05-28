@@ -1,5 +1,7 @@
 import pandas as pd
+import multiprocessing
 import os
+import gc
 import numpy as np
 import cvxpy as cp
 from datetime import timedelta
@@ -35,10 +37,11 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
     # ==================================================
     print("⏳ 正在提取 Time-Expanded Graph 參數 (Capacities & Erasures)...")
     
-    isl_cap = np.zeros((T, N, N))       # ISL 頻寬上限
-    dl_cap = np.zeros((T, N))           # 對地廣播頻寬上限
-    success_rate = np.zeros((T, N, U))  # 每個 User 對每顆衛星的成功率 (1 - erasure)
-    meo_inflow = np.zeros((T, N))       # MEO 每一秒注入的量
+    # 加上 dtype=np.float32，記憶體消耗直接減半
+    isl_cap = np.zeros((T, N, N), dtype=np.float32)       
+    dl_cap = np.zeros((T, N), dtype=np.float32)           
+    success_rate = np.zeros((T, N, U), dtype=np.float32)  
+    meo_inflow = np.zeros((T, N), dtype=np.float32)
 
     ts = load.timescale()
     
@@ -112,14 +115,21 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
     real_tx_cost = ISL_COST_FACTOR * cp.sum(f_isl) + 1.0 * cp.sum(f_dl)
     
     # 目標：每成功送達 1 個封包，給予極大獎勵 (10000)，確保求解器「寧可花錢也要先滿足封包」
-    objective = cp.Maximize((10000.0 * cp.sum(fulfilled)) - real_tx_cost)
+    objective = cp.Maximize((100.0 * cp.sum(fulfilled)) - real_tx_cost)
     prob = cp.Problem(objective, constraints)
 
     # ==================================================
     # 4. 求解與提取真實數據
     # ==================================================
     print(f"🚀 開始求解 (User 數量: {U})...")
-    prob.solve(solver=cp.OSQP, max_iter=10000)
+    # prob.solve(solver=cp.OSQP, max_iter=10000)
+    prob.solve(
+        solver=cp.OSQP, 
+        max_iter=50000, 
+        eps_abs=1e-4,   # 放寬絕對誤差容忍度
+        eps_rel=1e-4,   # 放寬相對誤差容忍度
+        verbose=False
+    )
 
     if prob.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
         # 1. 提取真實 Tx_Cost 跟 Fulfill 比例
@@ -133,7 +143,8 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
         
         # 極限模式下，完工時間通常是跑到最後一步
         final_comp_time = T * env.step_seconds
-        final_erasure = 0.1 # 請依照你測試的掉包率修改
+        era = env.erasure
+        final_erasure = era # 請依照你測試的掉包率修改
         
         # 寫入 Log 檔案
         dir_name = f"satellite_{MY_CONST_NAME}_checkpoints"
@@ -190,23 +201,60 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
         df_curve = pd.DataFrame(curve_data, columns=["step", "tx_cost", "fulfill"])
         df_curve.to_csv(curve_log_file, index=False)
         print(f"📈 已將隨時間變化的曲線數據寫入 {curve_log_file}")
+
+        # --- 釋放記憶體區塊 ---
+        del prob, f_isl, f_dl, s, fulfilled, objective, constraints
+        gc.collect()
+        # ---------------------
         
         return final_tx_cost, final_comp_time
     else:
         print(f"❌ 求解失敗，狀態: {prob.status}")
         return None, None
     
+def run_single_task(seed, n_user, era):
+    # 這個函數只負責跑單一任務，跑完記憶體就會被 OS 強制回收
+    env = SatelliteDataDisseminationEnv(
+        const_param=CONST_PARAM, 
+        num_users=n_user, 
+        target_k=CONST_PARAM.target_k,
+        test_mode=IS_TEST_MODE,
+        erasure=era,
+        seed=seed 
+    )
+    compute_offline_lower_bound(env)
 
 if __name__ == "__main__":
-    USER_NUMBERS = [1, 40, 80, 120, 160]
+    ERASURES = [0.1]
+    USER_NUMBERS = [1]
 
-    for n_user in USER_NUMBERS:
-        for seed in SEED_LIST:
-            env = SatelliteDataDisseminationEnv(
-                const_param=CONST_PARAM, 
-                num_users=n_user, 
-                target_k=CONST_PARAM.target_k,
-                test_mode=IS_TEST_MODE,
-                seed=seed 
-            )
-            compute_offline_lower_bound(env)
+    # 建立任務清單
+    # tasks = []
+    # for seed in SEED_LIST:
+    #     for n_user in USER_NUMBERS:
+    #         for era in ERASURES:
+    #             tasks.append((seed, n_user, era))
+
+    # # 限制「同時執行」的最大進程數，避免瞬間把 RAM 抽乾
+    # # 如果你的電腦有 32GB RAM，建議設 3 或 4；如果只有 16GB，設 2
+    # MAX_CONCURRENT_WORKERS = 3 
+    
+    # print(f"🚀 開始平行執行 {len(tasks)} 個任務，最大併發數: {MAX_CONCURRENT_WORKERS}")
+    
+    # with multiprocessing.Pool(processes=MAX_CONCURRENT_WORKERS) as pool:
+    #     pool.starmap(run_single_task, tasks)
+    
+    # print("✅ 所有排程計算完畢！")
+
+    for seed in SEED_LIST:
+        for n_user in USER_NUMBERS:
+            for era in ERASURES:
+                env = SatelliteDataDisseminationEnv(
+                    const_param=CONST_PARAM, 
+                    num_users=n_user, 
+                    target_k=CONST_PARAM.target_k,
+                    test_mode=IS_TEST_MODE,
+                    erasure=era,
+                    seed=seed 
+                )
+                compute_offline_lower_bound(env)

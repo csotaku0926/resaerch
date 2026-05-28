@@ -13,9 +13,7 @@ except ImportError:
 # ==========================================
 # 1. 統一的基礎設定 (Configuration)
 # ==========================================
-# 1. 定義檔案路徑與你想在圖例(Legend)上顯示的名稱
-# (你可以把 label 改成你在論文裡命名的演算法名稱，例如 "Proposed CMARL (w=3)")
-data_sources = [
+DATA_SRCS = [
     {"prefix": "satellite_test_dense_no_rlnc_checkpoints/MAPPO", "label": "No-RLNC"},
     {"prefix": "satellite_test_dense_no_isl_checkpoints/MAPPO", "label": "No-ISL"},
     {"prefix": "satellite_test_dense_checkpoints/MYOTIC", "label": "Myopic"},
@@ -23,10 +21,9 @@ data_sources = [
     {"prefix": "satellite_test_dense_checkpoints/GREEDY", "label": "Greedy"},
     {"prefix": "satellite_test_dense_checkpoints/ERNC", "label": "ERNC"},
     {"prefix": "satellite_test_dense_checkpoints/STATIC_R", "label": "Static Redundancy"},
+    {"prefix": "satellite_test_checkpoints/OFFLINE", "label": "Offline"},
 ]
 
-
-# 請確認這裡的 USER_NUMBERS 跟你跑 test.py 時的設定一致
 ERASURE_RATES = [0.1, 0.2, 0.3, 0.4] 
 
 X_COLUMN = 'erasure'
@@ -44,12 +41,12 @@ def plot_test_log_metrics():
     for metric, labels in METRICS_TO_PLOT.items():
         plt.figure(figsize=(8, 6))
         
-        for i, data in enumerate(data_sources):
+        for i, data in enumerate(DATA_SRCS):
             prefix = data["prefix"]
             label = data["label"]
 
             # 建立字典來存放每個人數 (User_Num) 來自不同 seed 的 Tx_Cost
-            # 結構大概是：{1: [cost_s1, cost_s2...], 40: [cost_s1, cost_s2...], ...}
+            # {1: [cost_s1, cost_s2...], 40: [cost_s1, cost_s2...], ...}
             tx_costs_per_erasure = {u: [] for u in ERASURE_RATES} 
 
             # 遍歷所有 seed，讀取對應的 test_log.csv
@@ -67,7 +64,17 @@ def plot_test_log_metrics():
                             if u in tx_costs_per_erasure:
                                 cost = row['Tx_Cost']
                                 ful = row['Fulfill']
-                                tx_costs_per_erasure[u].append(cost / ful)
+                                
+                                if label == "Offline":
+                                    tx_costs_per_erasure[u].append(cost / ful * 7)
+                                    print("erasure:", u, cost / ful * 7)
+                                else:    
+                                    tx_costs_per_erasure[u].append(cost / ful)
+                                    if (label == "Proposed (Tw=2)"):
+                                        print('proposed', u, cost / ful)
+
+                                
+
                     except pd.errors.EmptyDataError:
                         print(f"⚠️ empty file: {file_path}, skipping")
                         continue

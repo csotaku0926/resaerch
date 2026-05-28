@@ -26,6 +26,8 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
         self.step_seconds = step_seconds
         self.is_unicast = is_unicast
 
+        self.erasure = erasure
+
         # pareto frontier param
         self.omega_t = omega_t
         self.omega_c = omega_c

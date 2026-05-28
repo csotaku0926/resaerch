@@ -15,9 +15,9 @@ DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
 SEEDS = [1, 12, 123]  
 OMEGA_T = "0.6"         
-N_USER = 40    
+N_USER = 160    
 
-ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"] 
+# ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"] 
 ALGO_PREFIX = [
     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
     "satellite_test_dense_no_isl_checkpoints/MAPPO",
@@ -26,6 +26,7 @@ ALGO_PREFIX = [
     "satellite_test_dense_checkpoints/GREEDY",
     "satellite_test_dense_checkpoints/ERNC",
     "satellite_test_dense_checkpoints/STATIC_R",
+    "satellite_test_dense_checkpoints/OFFLINE",
 ]
 
 ALGO_CONFIG = {}
@@ -49,10 +50,12 @@ def plot_step_ful_curves():
         
         # 蒐集所有 Seed 的數據
         for seed in SEEDS:
-            if algo != "No-RLNC":
-                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv")
-            else:
+            if algo == "No-RLNC":
                 file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t0.5_s{seed}_curve.csv")
+            elif algo == "Offline":
+                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_s{seed}_curve.csv")
+            else:
+                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv")
 
             if not os.path.exists(file_name):
                 print(f"⚠️ [plot_step_ful_curves()] 找不到檔案: {file_name}, skipping")
@@ -122,7 +125,7 @@ def plot_step_ful_curves():
     plt.ylabel('Task Completion Rate (%)', fontsize=12)
     
     plt.xlim(0, 300)
-    plt.ylim(0, 105)
+    plt.ylim(0, 100)
     # if max_step_global > 0:
     #     plt.xlim(0, max_step_global)
         
@@ -147,10 +150,12 @@ def plot_cost_efficiency():
         
         for seed in SEEDS:
             # 【關鍵修復 1】：完全遵守 No-RLNC 讀取 t0.5 的邏輯
-            if algo != "No-RLNC":
-                file_path = f"{info['prefix']}_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv"
-            else:
+            if algo == "No-RLNC":
                 file_path = f"{info['prefix']}_0.1_{N_USER}_t0.5_s{seed}_curve.csv"
+            elif algo == "Offline":
+                file_path = f"{info['prefix']}_0.1_{N_USER}_s{seed}_curve.csv"
+            else:
+                file_path = f"{info['prefix']}_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv"
             
             if not os.path.exists(file_path):
                 print(f"⚠️ 找不到檔案: {file_path}，直接跳過。")
@@ -163,7 +168,7 @@ def plot_cost_efficiency():
             # 【關鍵修復 2】：完全遵守原本的 X 軸邏輯
             if algo not in ["Greedy", "ERNC", "Static Redundancy"]:
                 if algo == "Proposed":
-                    x_vals = df["tx_cost"].values * 3.0
+                    x_vals = df["tx_cost"].values
                 else:
                     x_vals = df["tx_cost"].values
             else:
@@ -227,5 +232,5 @@ def plot_cost_efficiency():
 
 
 if __name__ == "__main__":
-    plot_step_ful_curves() 
-    # plot_cost_efficiency()
+    # plot_step_ful_curves() 
+    plot_cost_efficiency()

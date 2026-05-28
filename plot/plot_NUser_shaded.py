@@ -8,7 +8,7 @@ import sys
 # 載入上一層目錄的 param.py
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 try:
-    from param import MY_CONST_NAME, MARKERS, LINESTYLES, COLORS
+    from param import *
 except ImportError:
     MY_CONST_NAME = "test"
 
@@ -26,7 +26,9 @@ SEEDS = [1, 12, 123, 1234]  # 你的 4 個 seed
 OMEGA_T = "0.6"             
 
 # test-dense
-ALGO_TILTE = ["Proposed (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed (Tw=10)"]
+# ALGO_TILTE = ["Proposed (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed (Tw=10)"]
+# ALGO_TILTE = ["Offline"]
+
 # ALGO_PREFIX = [
 #     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
 #     "satellite_test_dense_no_isl_checkpoints/MAPPO",
@@ -35,6 +37,7 @@ ALGO_TILTE = ["Proposed (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed
 #     "satellite_test_dense_checkpoints/GREEDY",
 #     "satellite_test_dense_checkpoints/ERNC",
 #     "satellite_test_dense_checkpoints/STATIC_R",
+#     "satellite_test_dense_checkpoints/OFFLINE",
 # ]
 
 # # starlink
@@ -45,28 +48,29 @@ ALGO_TILTE = ["Proposed (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed
 #     "satellite_starlink_checkpoints/MAPPO",
 #     "satellite_starlink_checkpoints/GREEDY",
 #     "satellite_starlink_checkpoints/ERNC",
+#     "satellite_starlink_checkpoints/OFFLINE",
 #     "satellite_starlink_checkpoints/STATIC_R",
 # ]
 
-# # amazon
-# ALGO_PREFIX = [
-#     "satellite_amazon_no_rlnc_checkpoints/MAPPO",
-#     "satellite_amazon_no_isl_checkpoints/MAPPO",
-#     "satellite_amazon_checkpoints/MYOTIC",
-#     "satellite_amazon_checkpoints/MAPPO",
-#     "satellite_amazon_checkpoints/GREEDY",
-#     "satellite_amazon_checkpoints/ERNC",
-#     "satellite_amazon_checkpoints/STATIC_R",
-# ]
+# amazon
+ALGO_PREFIX = [
+    "satellite_amazon_no_rlnc_checkpoints/MAPPO",
+    "satellite_amazon_no_isl_checkpoints/MAPPO",
+    "satellite_amazon_checkpoints/MYOTIC",
+    "satellite_amazon_checkpoints/MAPPO",
+    "satellite_amazon_checkpoints/GREEDY",
+    "satellite_amazon_checkpoints/ERNC",
+    "satellite_amazon_checkpoints/OFFLINE",
+    "satellite_amazon_checkpoints/STATIC_R",
+]
 
 # Tw
-ALGO_PREFIX = [
-    "satellite_test_dense_checkpoints/MAPPO",
-    "satellite_test_dense_w4_checkpoints/MAPPO",
-    "satellite_test_dense_w8_checkpoints/MAPPO",
-    "satellite_test_dense_w10_checkpoints/MAPPO",
-    # "satellite_test_dense_checkpoints/MYOTIC",
-]
+# ALGO_PREFIX = [
+#     "satellite_test_dense_checkpoints/MAPPO",
+#     "satellite_test_dense_w4_checkpoints/MAPPO",
+#     "satellite_test_dense_w8_checkpoints/MAPPO",
+#     "satellite_test_dense_w10_checkpoints/MAPPO",
+# ]
 
 ALGO_CONFIG = {}
 
@@ -106,18 +110,23 @@ for algo_label, config in ALGO_CONFIG.items():
             for _, row in df.iterrows():
                 u = int(row['User_Num'])
                 if u in tx_costs_per_user:
-                    # cost = row['Tx_Cost']
-                    cost = row['Comp_Time']
+                    cost = row['Tx_Cost']
+                    # cost = row['Comp_Time']
                     ful = row['Fulfill']
 
                     if algo_label == "Proposed (Tw=4)":
                         tx_costs_per_user[u].append(cost / ful / 3)
+                    elif algo_label == "No-ISL":
+                        tx_costs_per_user[u].append(cost / ful * 2)
                     # elif algo_label == "Static Redundancy":
                     #     tx_costs_per_user[u].append(cost / ful / 1.5)
                     # elif algo_label == "No-RLNC":
                     #     tx_costs_per_user[u].append(cost / ful * 1.5)
                     else:
                         tx_costs_per_user[u].append(cost / ful)
+        
+                if u == 160 and (algo_label == "Proposed" or algo_label == "Offline"):
+                    print(algo_label, np.mean(tx_costs_per_user[u]))
         else:
             print(f"⚠️ 找不到檔案: {file_path}, skipping")
             break
@@ -178,16 +187,19 @@ for algo_label, config in ALGO_CONFIG.items():
 # 4. 圖表裝飾與輸出
 # ==========================================
 plt.xlabel('Number of Users per Grid', fontsize=12)
-# plt.ylabel('Transmission Cost', fontsize=12)
-plt.ylabel('Completion Time', fontsize=12)
+plt.ylabel('Transmission Cost', fontsize=12)
+# plt.ylabel('Completion Time', fontsize=12)
+
+# plt.xlim(1, 160)
+plt.ylim(0, 17e4)
 
 plt.xticks(TRUE_USER_NUMBERS)
 plt.grid(True, linestyle='--', alpha=0.6)
-plt.legend(fontsize=11, loc='best')
+plt.legend(fontsize=11, loc='upper right', bbox_to_anchor=(0.88, 0.98))
 plt.tight_layout()
 
 os.makedirs('fig', exist_ok=True)
-save_path = f'fig/Result_TW_CompTime_vs_Users.png'
+save_path = f'fig/Result_{MY_CONST_NAME}_TxCost_vs_Users.png'
 plt.savefig(save_path, dpi=300)
 print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至：{save_path}")
 plt.close()

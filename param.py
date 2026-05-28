@@ -1,11 +1,11 @@
 from Constellation import *
 import os
 
-STARLINK_S2 =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=90, target_k=50) # p = 36, 20
+STARLINK_S2 =   Const_Param(alt=540.0, inc=53.2, p=12, s=10, t_max=90, target_k=50) # p = 36, 20
 STARLINK_NO_ISL_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, target_k=50, n_neighbor=0) # p = 36, 20
 STARLINK_NO_RLNC_ =   Const_Param(alt=540.0, inc=53.2, p=36, s=10, t_max=300, target_k=20, enable_RLNC=False) # p = 36, 20
 # TELESAT =   Const_Param(alt=1000, inc=99, p=27, s=13,  t_max=90, target_k=40) # K = 10, T = 40 (too high)
-AMAZON =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50) 
+AMAZON =        Const_Param(alt=630, inc=51.9, p=6, s=15, t_max=90, target_k=50)  # p=17, s=15,
 AMAZON_NO_ISL_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=90, target_k=50, n_neighbor=0)
 AMAZON_NO_RLNC_ =        Const_Param(alt=630, inc=51.9, p=17, s=15, t_max=300, target_k=20, enable_RLNC=False) 
 
@@ -38,7 +38,7 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "starlink"
+MY_CONST_NAME = "amazon"
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
@@ -75,8 +75,8 @@ TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
 TEST_PARETO = True
 TEST_ERASURE = False
 
-
 SEED_LIST = [1, 12, 123, 1234]
+ERASURES = [0.1, 0.2, 0.3, 0.4]
 #######################################################
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
 else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
@@ -132,7 +132,7 @@ TEST_ID = 'Starlink_Shell2_0_2'
 
 ######## plot settings ########
 # 定義每條線的點樣式(Marker)與顏色
-MARKERS = ['x', 'x', 'x', 'o', 's', 'v', '^']
-COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', '#2ca02c'] # 經典的藍、橘、綠
-LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'dashed']
-ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Static Redundancy"]
+MARKERS = ['x', 'x', 'x', 'o', 's', 'v', 'o', '^']
+COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', "#f8f012", '#2ca02c'] # 經典的藍、橘、綠
+LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'solid', 'dashed']
+ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Offline", "Static Redundancy"]
