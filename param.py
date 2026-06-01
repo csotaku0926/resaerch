@@ -38,7 +38,7 @@ TEST_DEFICIT_W4_  =  Const_Param(alt=540.0, inc=53.2, p=18, s=5,  t_max=90, targ
 TEST_DEFICIT_FUL_     =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40)
 TEST_DEFICIT_FUL_W3_  =  Const_Param(alt=540.0, inc=53.2, p=3, s=5,  t_max=90, target_k=40, Tw=3)
 
-MY_CONST_NAME = "amazon"
+MY_CONST_NAME = "starlink"
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [

@@ -41,28 +41,28 @@ OMEGA_T = "0.6"
 # ]
 
 # # starlink
-# ALGO_PREFIX = [
-#     "satellite_starlink_no_rlnc_checkpoints/MAPPO",
-#     "satellite_starlink_no_isl_checkpoints/MAPPO",
-#     "satellite_starlink_checkpoints/MYOTIC",
-#     "satellite_starlink_checkpoints/MAPPO",
-#     "satellite_starlink_checkpoints/GREEDY",
-#     "satellite_starlink_checkpoints/ERNC",
-#     "satellite_starlink_checkpoints/OFFLINE",
-#     "satellite_starlink_checkpoints/STATIC_R",
-# ]
+ALGO_PREFIX = [
+    "satellite_starlink_no_rlnc_checkpoints/MAPPO",
+    "satellite_starlink_no_isl_checkpoints/MAPPO",
+    "satellite_starlink_checkpoints/MYOTIC",
+    "satellite_starlink_checkpoints/MAPPO",
+    "satellite_starlink_checkpoints/GREEDY",
+    "satellite_starlink_checkpoints/ERNC",
+    "satellite_starlink_checkpoints/OFFLINE",
+    "satellite_starlink_checkpoints/STATIC_R",
+]
 
 # amazon
-ALGO_PREFIX = [
-    "satellite_amazon_no_rlnc_checkpoints/MAPPO",
-    "satellite_amazon_no_isl_checkpoints/MAPPO",
-    "satellite_amazon_checkpoints/MYOTIC",
-    "satellite_amazon_checkpoints/MAPPO",
-    "satellite_amazon_checkpoints/GREEDY",
-    "satellite_amazon_checkpoints/ERNC",
-    "satellite_amazon_checkpoints/OFFLINE",
-    "satellite_amazon_checkpoints/STATIC_R",
-]
+# ALGO_PREFIX = [
+#     "satellite_amazon_no_rlnc_checkpoints/MAPPO",
+#     "satellite_amazon_no_isl_checkpoints/MAPPO",
+#     "satellite_amazon_checkpoints/MYOTIC",
+#     "satellite_amazon_checkpoints/MAPPO",
+#     "satellite_amazon_checkpoints/GREEDY",
+#     "satellite_amazon_checkpoints/ERNC",
+#     "satellite_amazon_checkpoints/OFFLINE",
+#     "satellite_amazon_checkpoints/STATIC_R",
+# ]
 
 # Tw
 # ALGO_PREFIX = [
@@ -191,7 +191,7 @@ plt.ylabel('Transmission Cost', fontsize=12)
 # plt.ylabel('Completion Time', fontsize=12)
 
 # plt.xlim(1, 160)
-plt.ylim(0, 17e4)
+plt.ylim(0, 15e4)
 
 plt.xticks(TRUE_USER_NUMBERS)
 plt.grid(True, linestyle='--', alpha=0.6)
