@@ -43,11 +43,11 @@ def check_roi_coverage(T_max=100, step_second=10):
                 visible_found = True
 
                 
-def run_diagnostic(step_second=10, is_all_in=True, do_log=False, n_user=100):
+def run_diagnostic(const_param=CONST_, step_second=10, is_all_in=True, do_log=False, n_user=100, do_field=False):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=CONST_, 
+    env = SatelliteDataDisseminationEnv(const_param=const_param, 
                                         num_users=n_user, step_seconds=step_second, test_mode=True, use_deficit=USE_DEFICIT)
     obs, info = env.reset()
     
@@ -189,9 +189,12 @@ def reset_test():
     print([u.lat for u in env.constellation.user_grids[0].users])
 
 def main():
+    tmp_const = CONST_
+
     for n_user in [40]:
-        run_diagnostic(is_all_in=True, n_user=n_user)
-        run_diagnostic(is_all_in=False, n_user=n_user)
+        run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
+        tmp_const.enable_field = False
+        run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
    
 
 if __name__ == '__main__':

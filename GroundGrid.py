@@ -1,15 +1,17 @@
 from skyfield.api import wgs84
 from skyfield.api import EarthSatellite
+import numpy as np
 
 # User Class
 class User:
-    def __init__(self, user_id, lat, lon, target_k=100):
+    def __init__(self, user_id, lat, lon, target_k=100, q=2):
         self.user_id = user_id
         self.lat = lat
         self.lon = lon
         self.pos = wgs84.latlon(lat, lon)
         self.received_count = 0
         self.target_k = target_k
+        self.q = q # field size
 
         # for ARQ
         self.received_packet_set = set()
@@ -28,6 +30,31 @@ class User:
     def recv(self, amount:int):
         self.received_count = min(self.received_count + amount, self.target_k)
         return self.received_count
+    
+    def recv_with_linear_dependence(self, amount:int):
+        """
+        amount: 物理層成功接收(未掉包)的封包數量
+        target_k: 解碼所需的總 DoF (也就是 K)
+        q: Galois Field size (例如 2, 4, 16, 256)
+        """
+        innovative_count = 0
+        
+        # 對每一個成功抵達的封包，進行線性相依判定
+        for _ in range(int(amount)):
+            if self.received_count >= self.target_k: pass
+            
+            # 計算當下這個封包是 Innovative 的機率
+            prob_innovative = 1.0 - (self.q ** (self.received_count - self.target_k))
+            
+            # 擲骰子決定這個封包是不是廢包
+            if np.random.rand() < prob_innovative:
+                self.received_count += 1
+                innovative_count += 1
+            else:
+                # 發生線性相依，DoF 不增加 (這就是廢包)
+                pass
+                    
+        return innovative_count
 
     def recv_arq(self, packet_id: int):
         """ARQ 專用的接收函數 (認封包 ID)"""

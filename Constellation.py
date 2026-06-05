@@ -15,8 +15,8 @@ Telesat:
 OneWeb:
 """
 class Const_Param:
-    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5, max_buf=30, 
-                 grid_scale=10, n_neighbor=1, Tw=2, enable_RLNC=True):
+    def __init__(self, alt=540.0, inc=53.2, p=10, s=10, f=17, t_max=40, target_k=10, dl_cp=5,  
+                 grid_scale=10, n_neighbor=1, Tw=2, enable_RLNC=True, enable_field=False, q=2):
         self.alt = alt         # 高度 (km)
         self.inc = inc       # 傾角 (度)
         self.p = p                   # 軌道面數 (Planes)
@@ -25,16 +25,18 @@ class Const_Param:
         self.t_max = t_max
         self.target_k = target_k
         self.dl_cp = dl_cp
-        self.max_buf = max_buf
+        # self.max_buf = max_buf
         self.grid_scale = grid_scale
         self.n_neighbor = n_neighbor
         self.Tw = Tw
+        self.q = q
         self.enable_RLNC = enable_RLNC
+        self.enable_field = enable_field
 
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
-                 n_grids=10, num_users=10, erasure=0.1,
+                 n_grids=10, num_users=10, erasure=0.1, max_buf=30,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=5.0,
                  step_seconds=10, t_max=90, target_k=20, test_mode=False, enable_RLNC=True, seed=1234):
         # --- 1. Starlink Shell 2 官方參數 ---
@@ -44,7 +46,8 @@ class Constellation:
         self.s = param.s                   # 每面衛星數 (Sats per plane)
         self.f = param.f                   # 相位因子
         self.dl_cp = param.dl_cp
-        self.max_buf = param.max_buf
+        
+        self.max_buf = max_buf
         self.t = self.p * self.s                # 總共 1584 顆
         
         self.sat_id = 0
@@ -73,7 +76,7 @@ class Constellation:
         self.packet_size_bits = packet_size_bits
         self.broadcast_rate_bps = broadcast_rate_bps
         self.step_seconds = step_seconds
-        self.target_k = param.target_k
+        self.target_k = target_k
         self.num_users = num_users
         self.users_per_grid = max(num_users // self.n_grids, 1)
         self.max_covered_grid = 10 # assume at most cover 4 grids per time
@@ -88,6 +91,10 @@ class Constellation:
         self.grx_db = 20.0   # 接收天線增益
         self.losses_db = 3.0 # 其他系統與指向損失
         self.noise_dbm = -100.0
+
+        # finite field settings
+        self.enable_field = param.enable_field
+        self.q = param.q # field size
 
         # extra info
         self.estimated_recv = np.zeros(self.n_grids, dtype=np.float32)
@@ -294,7 +301,7 @@ class Constellation:
                     u_lat = np.random.uniform(lat, lat + grid_size)
                     u_lon = np.random.uniform(lon, lon + grid_size)
                     
-                    user = User(user_id_counter, u_lat, u_lon, target_k=target_k)
+                    user = User(user_id_counter, u_lat, u_lon, target_k=target_k, q=self.q)
                     grid.users.append(user)
                     grid.user_finish_time.append(-1)
                     user_id_counter += 1
@@ -605,7 +612,10 @@ class Constellation:
                 # 【關鍵】大家都面對同樣的 37 滴水，但各自憑實力接水
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
-                self.user_grids[g_idx].users[ui].recv(received)
+                if not self.enable_field:
+                    self.user_grids[g_idx].users[ui].recv(received)
+                else:
+                    self.user_grids[g_idx].users[ui].recv_with_linear_dependence(received)
                 usr_count += 1
             
             # update expected recv

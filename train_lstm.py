@@ -330,9 +330,9 @@ def env_creator(args):
     omega_c = args.get("omega_c", 0.5)
     
     env = SatelliteDataDisseminationEnv(
-        const_param=MY_CONST_PARAM, T_max=T_MAX, lambda_w=LAMBDA_W, 
+        const_param=MY_CONST_PARAM, lambda_w=LAMBDA_W, 
         is_myotic=IS_MYOTIC, test_mode=IS_TEST_MODE, num_users=N_USER,
-        erasure=ERASURE, use_deficit=USE_DEFICIT,
+        erasure=ERASURE, use_deficit=USE_DEFICIT, target_k=TARGET_K,
         omega_t=omega_t, omega_c=omega_c  # 傳給環境
     )
     return ParallelPettingZooEnv(env)

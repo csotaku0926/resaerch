@@ -20,11 +20,12 @@ DATA_SRCS = [
     {"prefix": "satellite_test_dense_checkpoints/MAPPO", "label": "Proposed (Tw=2)"},
     {"prefix": "satellite_test_dense_checkpoints/GREEDY", "label": "Greedy"},
     {"prefix": "satellite_test_dense_checkpoints/ERNC", "label": "ERNC"},
-    {"prefix": "satellite_test_dense_checkpoints/STATIC_R", "label": "Static Redundancy"},
     {"prefix": "satellite_test_checkpoints/OFFLINE", "label": "Offline"},
+    {"prefix": "satellite_test_dense_checkpoints/STATIC_R", "label": "Static Redundancy"},
 ]
 
 ERASURE_RATES = [0.1, 0.2, 0.3, 0.4] 
+THETA_THRES = [15, 20, 25, 30]
 
 X_COLUMN = 'erasure'
 
@@ -89,12 +90,12 @@ def plot_test_log_metrics():
             y_margin_Tx = []
 
             # 計算每個人數的平均值與 95% CI 誤差半徑
-            for u in ERASURE_RATES:
+            for iu, u in enumerate(ERASURE_RATES):
                 costs = tx_costs_per_erasure[u]
                 n_seeds = len(costs)
                 
                 if n_seeds > 0:
-                    x_users_plot.append(u)
+                    x_users_plot.append(THETA_THRES[iu])
                     mean_val = np.mean(costs)
                     y_mean_Tx.append(mean_val)
                     
@@ -135,11 +136,11 @@ def plot_test_log_metrics():
                 )
 
         # 設定圖表細節
-        plt.xlabel('Average Erasure Probability', fontsize=12)
+        plt.xlabel('Minimum Angle Threshold (degree)', fontsize=12)
         plt.ylabel(labels['ylabel'], fontsize=12)
         
         # 強制 X 軸對齊我們設定的 USER_NUMBERS
-        plt.xticks(ERASURE_RATES)
+        plt.xticks(THETA_THRES)
         
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend(fontsize=11, loc='best')

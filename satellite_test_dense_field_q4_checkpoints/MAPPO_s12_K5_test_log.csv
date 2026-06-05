@@ -1,0 +1,3 @@
+User_Num,Tx_Cost,Fulfill,Comp_Time,erasure,max_buf,target_k
+80,1473.92578125,0.6625,123.0625,0.1,1,5
+80,2229.57958984375,0.6125,119.90625,0.1,5,5
