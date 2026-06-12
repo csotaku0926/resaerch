@@ -4,7 +4,7 @@ import numpy as np
 
 # User Class
 class User:
-    def __init__(self, user_id, lat, lon, target_k=100, q=2):
+    def __init__(self, user_id, lat, lon, target_k=100, q=2, seed=1234):
         self.user_id = user_id
         self.lat = lat
         self.lon = lon
@@ -15,6 +15,8 @@ class User:
 
         # for ARQ
         self.received_packet_set = set()
+
+        # np.random.seed(seed)
 
     def get_dist_from_sat(self, sat: EarthSatellite, current_time):
         diff = sat - self.pos

@@ -249,12 +249,14 @@ if __name__ == "__main__":
     for seed in SEED_LIST:
         for n_user in USER_NUMBERS:
             for era in ERASURES:
-                env = SatelliteDataDisseminationEnv(
-                    const_param=CONST_PARAM, 
-                    num_users=n_user, 
-                    target_k=CONST_PARAM.target_k,
-                    test_mode=IS_TEST_MODE,
-                    erasure=era,
-                    seed=seed 
-                )
-                compute_offline_lower_bound(env)
+                for thes in THETA_THES:
+                    env = SatelliteDataDisseminationEnv(
+                        const_param=CONST_PARAM, 
+                        num_users=n_user, 
+                        target_k=CONST_PARAM.target_k,
+                        test_mode=IS_TEST_MODE,
+                        erasure=era,
+                        thes=thes,
+                        seed=seed 
+                    )
+                    compute_offline_lower_bound(env)

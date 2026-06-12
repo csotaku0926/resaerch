@@ -25,7 +25,7 @@ from param import *
 
 # ── 執行設定 ──────────────────────────────────────
 
-NUM_EPISODES = 2
+NUM_EPISODES = 1
 T_MAX = 300 #CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
@@ -199,7 +199,7 @@ def action_static_r(real_id, actual_env, current_time, static_plan):
 # ║  測試主迴圈                                           ║
 # ╚══════════════════════════════════════════════════════╝
 def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_curve=True, 
-             omega_t=0.5, omega_c=0.5, seed=1234, max_buf=30, target_k=20):
+             omega_t=0.5, omega_c=0.5, seed=1234, max_buf=30, target_k=20, thes=15):
     avg_tx_costs      = []
     avg_fulfill_rates = []
     avg_comp_times    = []
@@ -216,6 +216,8 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_era_test_log.csv")
         elif len(MAX_BUFS) > 1:
             log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_buf_test_log.csv")
+        elif len(THETA_THES) > 1:
+            log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_thes_test_log.csv")
         else:
             log_file_path = os.path.join(checkpoint_dir, f"{mode}_s{seed}_test_log.csv")
 
@@ -223,24 +225,24 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
         csv_writer = csv.writer(csv_file)
         # check if the file exists and not have words inside
         if csv_file.tell() == 0:
-            csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure", "max_buf", "target_k"])
+            csv_writer.writerow(["User_Num", "Tx_Cost", "Fulfill", "Comp_Time", "erasure", "max_buf", "target_k", "thes"])
 
     for era in ERASURES:
 
         for n_users in user_numbers:
-            print(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users} ══ seed={seed} ══ buf={max_buf} == k={target_k} ══")
+            print(f"\n[{mode}] ══ erasure={era} theta={thes} ══ n_users={n_users} ══ seed={seed} ══ buf={max_buf} == k={target_k} ══")
             with open(log_txt_file, "a") as f:
-                f.write(f"\n[{mode}] ══ erasure={era} ══ n_users={n_users}  ══ seed={seed} ══ buf={max_buf} == k={target_k}══\n")
+                f.write(f"\n[{mode}] ══ erasure={era} theta={thes} ══ n_users={n_users}  ══ seed={seed} ══ buf={max_buf} == k={target_k}══\n")
 
             if write_curve:
-                curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_t{omega_t}_k{target_k}_s{seed}_b{max_buf}_curve.csv")
+                curve_file_path = os.path.join(checkpoint_dir, f"{mode}_{era}_{n_users}_th{thes}_t{omega_t}_k{target_k}_s{seed}_b{max_buf}_curve.csv")
                 curve_csv_file = open(curve_file_path, "w", newline="")
                 curve_csv_writer = csv.writer(curve_csv_file)
                 curve_csv_writer.writerow(["step", "tx_cost", "fulfill"])
 
             raw_env = SatelliteDataDisseminationEnv(
                 const_param=CONST_PARAM, num_users=n_users, is_myotic=(mode == "MYOTIC"), test_mode=IS_TEST_MODE,
-                erasure=era, target_k=target_k,
+                erasure=era, target_k=target_k, thes=thes,
                 is_unicast=(not (mode == "MAPPO" or mode == "MYOTIC")), max_buf=max_buf,
                 omega_t=omega_t, omega_c=omega_c, seed=seed
             )
@@ -262,7 +264,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
             dl_ratios = []
 
             for ep in range(num_episodes):
-                obs, _ = env.reset()
+                obs, _ = env.reset(seed=seed)
                 actual_env = env.par_env if hasattr(env, "par_env") else env.unwrapped
                 done          = False
                 final_tx_cost = 0.0
@@ -352,7 +354,7 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                 f.write(f"  → avg tx_cost={avg_tx:.2f}, fulfill={avg_ful*100:.1f}%")
                 
             if write_log:
-                csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time, era, max_buf, target_k])
+                csv_writer.writerow([n_users, avg_tx, avg_ful, avg_time, era, max_buf, target_k, thes])
                 csv_file.flush() # 強制寫入硬碟，這樣就算跑到一半強制中斷，前面的紀錄也都會在
 
 
@@ -389,78 +391,83 @@ def main():
             for target_k in TARGET_KS:
 
                 for m_buf in MAX_BUFS:
-                    for p_config in PARETO_CONFIGS:
-                    
-                        omega_t = p_config["omega_t"]
-                        omega_c = p_config["omega_c"]
 
-                        run_name = f"WT{int(omega_t * 10)}_WC{int(omega_c * 10)}"
-                        
-                        if TEST_PARETO:
-                            env_name = f"satellite_nc_env_{run_name}"
-                        else:
-                            env_name = "satellite_nc_env"
-
-                        # register customized model
-                        if mode == "MAPPO":
-                            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
-                            def env_creator(cfg):
-                                return ParallelPettingZooEnv(
-                                    SatelliteDataDisseminationEnv(
-                                        const_param=CONST_PARAM,
-                                        num_users=cfg.get("num_users", 80),
-                                        erasure=cfg.get("erasure", 0.1),    
-                                        test_mode=IS_TEST_MODE,
-                                        max_buf=m_buf,
-                                        target_k=target_k,
-                                        seed=seed, # set current seed
-                                ))
-                            register_env(env_name, env_creator)
-
-                        # register customized model
-                        elif mode == "MYOTIC":
-                            ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
-                            def env_creator(cfg):
-                                return ParallelPettingZooEnv(
-                                    SatelliteDataDisseminationEnv(
-                                        const_param=CONST_PARAM, 
-                                        num_users=cfg.get("num_users", 80),
-                                        erasure=cfg.get("erasure", 0.1),    
-                                        is_myotic=True, 
-                                        test_mode=IS_TEST_MODE,
-                                        max_buf=m_buf,
-                                        target_k=target_k,
-                                        seed=seed
-                                ))
-                            register_env(env_name, env_creator)
+                    for thes in THETA_THES:
                             
-                        # algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
-                        if mode == "MAPPO" or mode == "MYOTIC":
-                            # load checkpoint
-                            if TEST_PARETO:
-                                _path = os.path.join(TEST_CHECKPOINT_PATH, run_name)
-                                if (not os.path.exists(_path)):
-                                    print(f"⚠️ {_path} checkpoint not exist, skipping...")
-                                    continue
-
-                                algo = Algorithm.from_checkpoint(os.path.abspath(_path))
-                            else:
-                                if (not os.path.exists(TEST_CHECKPOINT_PATH)):
-                                    print(f"⚠️ {TEST_CHECKPOINT_PATH} checkpoint not exist, skipping...")
-                                    continue
-                                algo = Algorithm.from_checkpoint(os.path.abspath(TEST_CHECKPOINT_PATH))
-                            print("[TEST.main] finish loading checkpoints!")
-
-                        tx_costs, fulfill_rates, times = run_mode(
-                            mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG, 
-                            omega_t=omega_t, omega_c=omega_c, seed=seed, max_buf=m_buf, target_k=target_k)
+                        for p_config in PARETO_CONFIGS:
                         
-                        if TEST_PARETO:
-                            csv_writer.writerow([omega_t, omega_c, times[0], tx_costs[0], fulfill_rates[0]])
+                            omega_t = p_config["omega_t"]
+                            omega_c = p_config["omega_c"]
 
-                        # if not CTDE, stop pareto loop
-                        if mode != 'MAPPO' and mode != 'MYOTIC':
-                            break
+                            run_name = f"WT{int(omega_t * 10)}_WC{int(omega_c * 10)}"
+                            
+                            if TEST_PARETO:
+                                env_name = f"satellite_nc_env_{run_name}"
+                            else:
+                                env_name = "satellite_nc_env"
+
+                            # register customized model
+                            if mode == "MAPPO":
+                                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_LSTM_Model)
+                                def env_creator(cfg):
+                                    return ParallelPettingZooEnv(
+                                        SatelliteDataDisseminationEnv(
+                                            const_param=CONST_PARAM,
+                                            num_users=cfg.get("num_users", 80),
+                                            erasure=cfg.get("erasure", 0.1),    
+                                            test_mode=IS_TEST_MODE,
+                                            max_buf=m_buf,
+                                            thes=thes,
+                                            target_k=target_k,
+                                            seed=seed, # set current seed
+                                    ))
+                                register_env(env_name, env_creator)
+
+                            # register customized model
+                            elif mode == "MYOTIC":
+                                ModelCatalog.register_custom_model("my_ctde_model", MAPPO_CTDE_Model)
+                                def env_creator(cfg):
+                                    return ParallelPettingZooEnv(
+                                        SatelliteDataDisseminationEnv(
+                                            const_param=CONST_PARAM, 
+                                            num_users=cfg.get("num_users", 80),
+                                            erasure=cfg.get("erasure", 0.1),    
+                                            is_myotic=True, 
+                                            test_mode=IS_TEST_MODE,
+                                            max_buf=m_buf,
+                                            thes=thes,
+                                            target_k=target_k,
+                                            seed=seed
+                                    ))
+                                register_env(env_name, env_creator)
+                                
+                            # algo = Algorithm.from_checkpoint(os.path.abspath(f"./satellite_{MY_CONST_NAME}_myotic_checkpoints"))
+                            if mode == "MAPPO" or mode == "MYOTIC":
+                                # load checkpoint
+                                if TEST_PARETO:
+                                    _path = os.path.join(TEST_CHECKPOINT_PATH, run_name)
+                                    if (not os.path.exists(_path)):
+                                        print(f"⚠️ {_path} checkpoint not exist, skipping...")
+                                        continue
+
+                                    algo = Algorithm.from_checkpoint(os.path.abspath(_path))
+                                else:
+                                    if (not os.path.exists(TEST_CHECKPOINT_PATH)):
+                                        print(f"⚠️ {TEST_CHECKPOINT_PATH} checkpoint not exist, skipping...")
+                                        continue
+                                    algo = Algorithm.from_checkpoint(os.path.abspath(TEST_CHECKPOINT_PATH))
+                                print("[TEST.main] finish loading checkpoints!")
+
+                            tx_costs, fulfill_rates, times = run_mode(
+                                mode, USER_NUMBERS, NUM_EPISODES, algo=algo, write_curve=DO_TEST_LOG, write_log=DO_TEST_LOG, 
+                                omega_t=omega_t, omega_c=omega_c, seed=seed, max_buf=m_buf, target_k=target_k, thes=thes)
+                            
+                            if TEST_PARETO:
+                                csv_writer.writerow([omega_t, omega_c, times[0], tx_costs[0], fulfill_rates[0]])
+
+                            # if not CTDE, stop pareto loop
+                            if mode != 'MAPPO' and mode != 'MYOTIC':
+                                break
 
         if TEST_PARETO: csv_file.close()
     ray.shutdown()

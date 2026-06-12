@@ -40,7 +40,7 @@ TEST_DEFICIT_W4_  =  Const_Param(p=18, s=5,  t_max=90,  Tw=4)
 TEST_DEFICIT_FUL_     =  Const_Param(p=3, s=5,  t_max=90, )
 TEST_DEFICIT_FUL_W3_  =  Const_Param(p=3, s=5,  t_max=90,  Tw=3)
 
-MY_CONST_NAME = "test_dense_field_q4"
+MY_CONST_NAME = "test_dense"
 
 # Pareto 掃描的權重組合 [omega_t (時間), omega_c (能量)]
 PARETO_CONFIGS = [
@@ -70,17 +70,18 @@ DO_TEST_LOG = True
 
 ###########################################
 
-TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-# TEST_MODES = ["GREEDY", "ERNC" , "STATIC_R"] # "GREEDY", "ERNC" , "STATIC_R"
+# TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
+TEST_MODES = ["ERNC", "GREEDY", "STATIC-R"] # "GREEDY", "ERNC" , "STATIC_R"
 USER_NUMBERS = [80]
-ERASURES = [0.1, 0.2, 0.3, 0.4] #[0.1, 0.2, 0.3, 0.4]
+ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
+THETA_THES = [15, 30] # 20, 25, 30]
 MAX_BUFS = [30] # [5, 10, 15, 20, 25, 30]
-TARGET_KS = [10, 20, 30] #[10, 20, 30]
+TARGET_KS = [30] #[10, 20, 30]
 
 # set to True if checkpoint it stored in checkpoints/WTX_WCX
 TEST_PARETO = True
 
-SEED_LIST = [1, 12, 123, 1234]
+SEED_LIST = [1, 12, 123, 1234, 12345]
 #######################################################
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
 else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
@@ -139,10 +140,17 @@ TEST_ID = 'Starlink_Shell2_0_2'
 
 ######## plot settings ########
 # 定義每條線的點樣式(Marker)與顏色
+MARKERS = ['x', 'x', 'x', 'o', 's', 'v', 'o', '^']
+COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', '#2ca02c', "#f8f012"] 
+LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'dashed', 'solid']
+ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "PACE", "Greedy", "ERNC", "Static Redundancy", "Offline"]
+
 # MARKERS = ['x', 'x', 'x', 'o', 's', 'v', 'o', '^']
-# COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', "#f8f012", '#2ca02c'] # 經典的藍、橘、綠
-# LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'solid', 'dashed']
-# ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "Proposed", "Greedy", "ERNC", "Offline", "Static Redundancy"]
+# COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', '#2ca02c', "#f8f012"] 
+# LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'dashed', 'solid']
+# # ALGO_TILTE = ["Myopic", "PACE", "PACE (Tw = 3)", "PACE (Tw = 4)"]
+# ALGO_TILTE = ["PACE", "PACE (Tw = 4)", "PACE (Tw = 8)", "PACE (Tw = 10)"]
+
 
 # Thm 1
 # MARKERS = ['x', 'o', 's', 'v', 'o', '^']
@@ -151,7 +159,7 @@ TEST_ID = 'Starlink_Shell2_0_2'
 # ALGO_TILTE = ["proposed", "proposed1", "proposed2", "lower bound", "lower bound1", "lower bound2"] #, "Greedy", "ERNC", "Offline", "Static Redundancy"]
 
 # Thm 2
-MARKERS = ['x', 'o']
-COLORS = ["#b41f21", '#1f77b4'] # 經典的藍、橘、綠
-LINESTYLES = ['dashed', 'solid',]
-ALGO_TILTE = ["Myopic", "Proposed"] #, "Greedy", "ERNC", "Offline", "Static Redundancy"]
+# MARKERS = ['x', 'o']
+# COLORS = ["#b41f21", '#1f77b4'] # 經典的藍、橘、綠
+# LINESTYLES = ['dashed', 'solid',]
+# ALGO_TILTE = ["Myopic", "PACE"] #, "Greedy", "ERNC", "Offline", "Static Redundancy"]

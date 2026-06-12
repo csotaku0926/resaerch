@@ -1,0 +1,58 @@
+
+[ERNC] ══ erasure=0.1 theta=15 ══ n_users=80  ══ seed=1 ══ buf=30 == k=30══
+  ep 01: tx=33771.0, time=83.9 fulfill=82.5%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42953938245773315
+  ep 02: tx=45229.0, time=83.65 fulfill=80.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.38391533493995667
+  → avg tx_cost=39500.00, fulfill=81.2%
+[ERNC] ══ erasure=0.1 theta=30 ══ n_users=80  ══ seed=1 ══ buf=30 == k=30══
+  ep 01: tx=17953.0, time=88.7 fulfill=80.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.43231549859046936
+  ep 02: tx=23869.0, time=102.5 fulfill=70.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.4423968195915222
+  → avg tx_cost=20911.00, fulfill=75.0%
+[ERNC] ══ erasure=0.1 theta=15 ══ n_users=80  ══ seed=12 ══ buf=30 == k=30══
+  ep 01: tx=33771.0, time=83.9 fulfill=82.5%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42953938245773315
+  ep 02: tx=45229.0, time=83.65 fulfill=80.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.38391533493995667
+  → avg tx_cost=39500.00, fulfill=81.2%
+[ERNC] ══ erasure=0.1 theta=30 ══ n_users=80  ══ seed=12 ══ buf=30 == k=30══
+  ep 01: tx=17953.0, time=88.7 fulfill=80.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.43231549859046936
+  ep 02: tx=23869.0, time=102.5 fulfill=70.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.4423968195915222
+  → avg tx_cost=20911.00, fulfill=75.0%
+[ERNC] ══ erasure=0.1 theta=15 ══ n_users=80  ══ seed=1 ══ buf=30 == k=30══
+  ep 01: tx=49954.0, time=86.55 fulfill=77.5%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42466670274734497
+  ep 02: tx=49954.0, time=86.55 fulfill=77.5%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42466670274734497
+  → avg tx_cost=49954.00, fulfill=77.5%
+[ERNC] ══ erasure=0.1 theta=30 ══ n_users=80  ══ seed=1 ══ buf=30 == k=30══
+  ep 01: tx=22441.0, time=87.4875 fulfill=75.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42466670274734497
+  ep 02: tx=22441.0, time=87.4875 fulfill=75.0%
+avg ISL ratio: 0.0
+avg DL ratio: 0.42466670274734497
+  → avg tx_cost=22441.00, fulfill=75.0%
+[ERNC] ══ erasure=0.1 theta=15 ══ n_users=80  ══ seed=12 ══ buf=30 == k=30══
+  ep 01: tx=49298.0, time=99.5625 fulfill=73.8%
+avg ISL ratio: 0.0
+avg DL ratio: 0.4463333785533905
+  ep 02: tx=49298.0, time=99.5625 fulfill=73.8%
+avg ISL ratio: 0.0
+avg DL ratio: 0.4463333785533905
+  → avg tx_cost=49298.00, fulfill=73.8%
+[ERNC] ══ erasure=0.1 theta=30 ══ n_users=80  ══ seed=12 ══ buf=30 == k=30══

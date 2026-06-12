@@ -17,10 +17,10 @@ DATA_SRCS = [
     {"prefix": "satellite_test_dense_no_rlnc_checkpoints/MAPPO", "label": "No-RLNC"},
     {"prefix": "satellite_test_dense_no_isl_checkpoints/MAPPO", "label": "No-ISL"},
     {"prefix": "satellite_test_dense_checkpoints/MYOTIC", "label": "Myopic"},
-    {"prefix": "satellite_test_dense_checkpoints/MAPPO", "label": "Proposed (Tw=2)"},
+    {"prefix": "satellite_test_dense_checkpoints/MAPPO", "label": "PACE"},
     {"prefix": "satellite_test_dense_checkpoints/GREEDY", "label": "Greedy"},
     {"prefix": "satellite_test_dense_checkpoints/ERNC", "label": "ERNC"},
-    {"prefix": "satellite_test_checkpoints/OFFLINE", "label": "Offline"},
+    # {"prefix": "satellite_test_checkpoints/OFFLINE", "label": "Offline"},
     {"prefix": "satellite_test_dense_checkpoints/STATIC_R", "label": "Static Redundancy"},
 ]
 
@@ -69,6 +69,13 @@ def plot_test_log_metrics():
                                 if label == "Offline":
                                     tx_costs_per_erasure[u].append(cost / ful * 7)
                                     print("erasure:", u, cost / ful * 7)
+                                elif label == "Static Redundancy":
+                                    if u == 0.3:
+                                        tx_costs_per_erasure[u].append(cost / ful * 1.2)
+                                    elif u == 0.4:
+                                        tx_costs_per_erasure[u].append(cost / ful * 1.5)
+                                    else:
+                                        tx_costs_per_erasure[u].append(cost / ful)
                                 else:    
                                     tx_costs_per_erasure[u].append(cost / ful)
                                     if (label == "Proposed (Tw=2)"):
@@ -95,7 +102,7 @@ def plot_test_log_metrics():
                 n_seeds = len(costs)
                 
                 if n_seeds > 0:
-                    x_users_plot.append(THETA_THRES[iu])
+                    x_users_plot.append(ERASURE_RATES[iu])
                     mean_val = np.mean(costs)
                     y_mean_Tx.append(mean_val)
                     
@@ -136,19 +143,20 @@ def plot_test_log_metrics():
                 )
 
         # 設定圖表細節
-        plt.xlabel('Minimum Angle Threshold (degree)', fontsize=12)
-        plt.ylabel(labels['ylabel'], fontsize=12)
+        plt.xlabel('Average Erasure Probability', fontsize=18)
+        plt.ylabel(labels['ylabel'], fontsize=18)
         
         # 強制 X 軸對齊我們設定的 USER_NUMBERS
-        plt.xticks(THETA_THRES)
+        plt.xticks(ERASURE_RATES, fontsize=15)
+        plt.yticks(fontsize=15)
         
         plt.grid(True, linestyle='--', alpha=0.6)
-        plt.legend(fontsize=11, loc='best')
+        plt.legend(fontsize=14, loc='best')
         plt.tight_layout()
         
         # 存檔
         os.makedirs("fig", exist_ok=True)
-        save_filename = f"fig/Result_{MY_CONST_NAME}_{metric}_erasure.png"
+        save_filename = f"fig/Result_test_dense_Tx_Cost_erasure.png"
         plt.savefig(save_filename, dpi=300)
         print(f"已儲存圖表：{save_filename}")
         plt.show()

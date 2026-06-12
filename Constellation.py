@@ -36,7 +36,7 @@ class Const_Param:
 class Constellation:
     def __init__(self, param: Const_Param, # alt=540.0, inc=53.2, p=10, s=10, f=17, 
                  meo_alt=10000, meo_inc=45.0,
-                 n_grids=10, num_users=10, erasure=0.1, max_buf=30,
+                 n_grids=10, num_users=10, erasure=0.1, max_buf=30, thes=15,
                  packet_size_bits=80e6, broadcast_rate_bps=10e6, meo_tx_rate_bps=50e6, grid_scale=5.0,
                  step_seconds=10, t_max=90, target_k=20, test_mode=False, enable_RLNC=True, seed=1234):
         # --- 1. Starlink Shell 2 官方參數 ---
@@ -55,8 +55,9 @@ class Constellation:
 
         self.n_grids = n_grids
         self.grid_scale = grid_scale
-        self.min_angle_limit = 30.0
+        # self.min_angle_limit = 30.0
         self.erasure_rate = erasure
+        self.thes = thes
 
         self.agents = []
         self.user_grids = []
@@ -301,7 +302,7 @@ class Constellation:
                     u_lat = np.random.uniform(lat, lat + grid_size)
                     u_lon = np.random.uniform(lon, lon + grid_size)
                     
-                    user = User(user_id_counter, u_lat, u_lon, target_k=target_k, q=self.q)
+                    user = User(user_id_counter, u_lat, u_lon, target_k=target_k, q=self.q, seed=self.seed)
                     grid.users.append(user)
                     grid.user_finish_time.append(-1)
                     user_id_counter += 1
@@ -522,7 +523,7 @@ class Constellation:
         slant_range_km = distance.km
         
         # 1. 物理視距極限保護
-        if elevation_deg < 20.0:
+        if elevation_deg < self.thes:
             if do_log: print("elev:", elevation_deg)
             return 1.0 # 仰角過低，被地球曲率或建築物完全遮蔽，物理上100%掉包
             
@@ -604,12 +605,12 @@ class Constellation:
                 alt, _, _ = difference.at(current_time).altaz()
                 
                 # 如果仰角 > 15 度，代表波束涵蓋到了這個 user
-                if alt.degrees < self.min_angle_limit: continue
+                if alt.degrees < self.thes: continue
 
                 # 算出自己的漏水率
                 user_erasure_rate = self.calculate_erasure_rate(agent_id, user, current_time)
                 
-                # 【關鍵】大家都面對同樣的 37 滴水，但各自憑實力接水
+                # bino distribute
                 received = np.random.binomial(int(amount), 1.0 - user_erasure_rate)
                 
                 if not self.enable_field:
@@ -644,7 +645,7 @@ class Constellation:
                 difference = sat - user.pos 
                 alt, _, _ = difference.at(current_time).altaz()
                 
-                if alt.degrees < self.min_angle_limit: 
+                if alt.degrees < self.thes: 
                     continue
 
                 user_erasure_rate = self.calculate_erasure_rate(agent_id, user, current_time)

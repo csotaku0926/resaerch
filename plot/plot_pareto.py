@@ -17,7 +17,7 @@ data_sources = [
     {"path": "test_dense_no_rlnc_checkpoints/pareto_result.csv", "label": "No-RLNC"},
     {"path": "test_dense_no_isl_checkpoints/pareto_result.csv", "label": "No-ISL"},
     {"path": "test_dense_myotic_checkpoints/pareto_result.csv", "label": "Myopic"},
-    {"path": "test_dense_checkpoints/pareto_result.csv", "label": "Proposed"},
+    {"path": "test_dense_checkpoints/pareto_result.csv", "label": "PACE"},
     # {"path": "test_w3_checkpoints/pareto_result.csv", "label": "Proposed (Tw=3)"},
     # {"path": "test_w4_checkpoints/pareto_result.csv", "label": "Proposed (Tw=4)"}
 ]
@@ -91,14 +91,16 @@ for i, data in enumerate(data_sources):
 
 # 3. 美化圖表外觀
 # plt.title('Energy-Latency Pareto Frontier', fontsize=16, fontweight='bold', pad=15)
-plt.xlabel('Transmission Cost', fontsize=14)
-plt.ylabel('Completion Time', fontsize=14)
+plt.xlabel('Transmission Cost', fontsize=18)
+plt.ylabel('Completion Time', fontsize=18)
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
 
 # 加上網格線，讓讀者更容易對齊數值
 plt.grid(True, linestyle='--', alpha=0.6)
 
 # 顯示圖例 (Legend)
-plt.legend(fontsize=12, loc='best')
+plt.legend(fontsize=15, loc='best')
 
 # 自動調整邊界
 plt.tight_layout()

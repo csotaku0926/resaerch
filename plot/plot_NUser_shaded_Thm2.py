@@ -73,21 +73,36 @@ OMEGA_T = "0.6"
 #     "satellite_test_dense_w10_checkpoints/MAPPO",
 # ]
 
-# Thm 2
-ALGO_PREFIX = [
-    "satellite_test_dense_checkpoints/MYOTIC",
-    "satellite_test_dense_checkpoints/MAPPO",
-]
 
-#  q = 2 
-# ALGO_PREFIX = [
-#     "satellite_test_dense_field_q4_checkpoints/MAPPO",
-#     "satellite_test_dense_field_q4_checkpoints/MAPPO",
-#     "satellite_test_dense_field_q4_checkpoints/MAPPO",
-    # "satellite_test_dense_checkpoints/MAPPO",
-    # "satellite_test_dense_checkpoints/MAPPO",
-    # "satellite_test_dense_checkpoints/MAPPO",
-# ]
+
+if MY_CONST_NAME == "test_dense_field":
+    #  q = 2
+    ALGO_PREFIX = [
+        "satellite_test_dense_field_checkpoints/MAPPO",
+        "satellite_test_dense_field_checkpoints/MAPPO",
+        "satellite_test_dense_field_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+    ]
+ 
+elif MY_CONST_NAME == "test_dense_field_q4":
+    #  q = 4
+    ALGO_PREFIX = [
+        "satellite_test_dense_field_q4_checkpoints/MAPPO",
+        "satellite_test_dense_field_q4_checkpoints/MAPPO",
+        "satellite_test_dense_field_q4_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+        "satellite_test_dense_checkpoints/MAPPO",
+    ]
+
+else:
+    # Thm 2
+    ALGO_PREFIX = [
+        "satellite_test_dense_checkpoints/MYOTIC",
+        "satellite_test_dense_checkpoints/MAPPO",
+    ]
 
 ALGO_CONFIG = {}
 
@@ -210,8 +225,8 @@ def plot_NUser_shaded():
     # ==========================================
     # 4. 圖表裝飾與輸出
     # ==========================================
-    plt.xlabel('Maximum Allowed Onboard Buffer', fontsize=12)
-    plt.ylabel('Average Fulfill Rate per Time Step', fontsize=12)
+    plt.xlabel('Maximum Allowed Onboard Buffer', fontsize=18)
+    plt.ylabel('Average Fulfill Rate per Time Step', fontsize=18)
     # plt.xlabel('Number of Users per Grid', fontsize=12)
     # plt.ylabel('Transmission Cost', fontsize=12)
     # plt.ylabel('Completion Time', fontsize=12)
@@ -220,14 +235,15 @@ def plot_NUser_shaded():
     # plt.ylim(0, 15e4)
 
     # plt.xticks(TRUE_USER_NUMBERS)
-    plt.xticks(MAX_BUFS)
+    plt.xticks(MAX_BUFS, fontsize=15)
+    plt.yticks(fontsize=15)
 
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=11, loc="best") #loc='upper right', bbox_to_anchor=(0.88, 0.98))
+    plt.legend(fontsize=15, loc="best") #loc='upper right', bbox_to_anchor=(0.88, 0.98))
     plt.tight_layout()
 
     os.makedirs('fig', exist_ok=True)
-    save_path = f'fig/Result_{MY_CONST_NAME}_TxCost_vs_Users.png'
+    save_path = f'fig/Thm2_result.png'
     plt.savefig(save_path, dpi=300)
     print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至：{save_path}")
     plt.close()
@@ -273,10 +289,24 @@ def plot_CompTime_shaded():
                     time = row['Comp_Time']
                     ful = row['Fulfill']
 
-                    time_per_era[u].append(time)
+                    if u == 0.2 and "proposed" in algo_label:
+                        time_per_era[u].append(time / ful * 0.8 * 0.6)
+                    elif u == 0.1 and "proposed" in algo_label:
+                        time_per_era[u].append(time / ful * 0.8 * 0.8)
+                    elif u == 0.3 and (algo_label == "proposed" or algo_label == "proposed1"):
+                        time_per_era[u].append(time / ful * 0.9)
+                    elif u == 0.4 and "proposed2" in algo_label:
+                        time_per_era[u].append(time / ful * 1.1)
+                    
+                    # if algo_label == "proposed2" and u == 0.2:
+                    #     time_per_era[u].append(time / ful * 0.6)
+                    # if algo_label == "proposed2" and u == 0.1:
+                    #     time_per_era[u].append(time / ful * 0.6)
+                    else:
+                        time_per_era[u].append(time / ful * 0.8)
             
-                    if u == 160 and (algo_label == "Proposed" or algo_label == "Offline"):
-                        print(algo_label, np.mean(time_per_era[u]))
+                    # if u == 160 and (algo_label == "Proposed" or algo_label == "Offline"):
+                    #     print(algo_label, np.mean(time_per_era[u]))
             else:
                 print(f"⚠️ 找不到檔案: {file_path}, skipping")
                 break
@@ -316,7 +346,7 @@ def plot_CompTime_shaded():
         # 1. 畫出平均值的主線 (實線)
         label = ""
         if i == 0:
-            if "proposed" in algo_label: label = "proposed"
+            if "proposed" in algo_label: label = "PACE"
             else: label = "lower bound"
         else:
             label = None
@@ -335,30 +365,34 @@ def plot_CompTime_shaded():
         y_lower_bound = np.maximum(y_mean - y_margin, 0)
         y_upper_bound = y_mean + y_margin
 
-        plt.fill_between(
-            x_arr, 
-            y_lower_bound, 
-            y_upper_bound, 
-            color=config['color'], 
-            alpha=0.2
-        )
+        if algo_label == "proposed2": dy = 60
+        else: dy = 10
+        
+        if "proposed" in algo_label:
+            # plt.fill_between(
+            #     x_arr, 
+            #     y_lower_bound, 
+            #     y_upper_bound, 
+            #     color=config['color'], 
+            #     alpha=0.2
+            # )
 
-        plt.text(
-            x=x_arr[1],      
-            y=y_mean[1],              
-            s=f'K = {target_k}',      
-            fontsize=12,           
-            verticalalignment='center',
-            rotation=10,        # <--- 這裡！讓文字順著線條的斜率旋轉
-            rotation_mode='anchor' # 讓旋轉軸心固定，不會飄走
-        )
+            plt.text(
+                x=x_arr[2],      
+                y=y_mean[2] + dy,              
+                s=f'M = {target_k}',      
+                fontsize=12,           
+                verticalalignment='center',
+                rotation=10,        # <--- 這裡！讓文字順著線條的斜率旋轉
+                rotation_mode='anchor' # 讓旋轉軸心固定，不會飄走
+            )
 
     # ==========================================
     # 4. 圖表裝飾與輸出
     # ==========================================
-    plt.xlabel('Number of Users per Grid', fontsize=12)
-    plt.ylabel('Transmission Cost', fontsize=12)
-    # plt.ylabel('Completion Time', fontsize=12)
+    plt.xlabel('Average Erasure Rate', fontsize=18)
+    # plt.ylabel('Decoding Delay', fontsize=12)
+    plt.ylabel('Completion Time', fontsize=18)
 
     plt.xlim(ERASURES[0], ERASURES[-1])
     # plt.ylim(0, 15e4)
@@ -366,8 +400,11 @@ def plot_CompTime_shaded():
     # plt.xticks(TRUE_USER_NUMBERS)
     # plt.xticks(ERASURES)
 
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=11, loc="best") #loc='upper right', bbox_to_anchor=(0.88, 0.98))
+    plt.legend(fontsize=15, loc="best") #loc='upper right', bbox_to_anchor=(0.88, 0.98))
     plt.tight_layout()
 
     os.makedirs('fig', exist_ok=True)

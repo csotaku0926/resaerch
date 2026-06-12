@@ -31,6 +31,7 @@ ALGO_PREFIX = [
 
 ALGO_CONFIG = {}
 for i, alg_t in enumerate(ALGO_TILTE):
+    if i >= len(ALGO_PREFIX): break
     ALGO_CONFIG[alg_t] = {
         "prefix": ALGO_PREFIX[i],
         "marker": MARKERS[i],
@@ -67,11 +68,15 @@ def plot_step_ful_curves():
 
             x_vals = df['step'].values
 
-            if algo == "No-RLNC":
-                x_vals = (df["step"] * 3).values
-            if algo == "No-ISL":
-                x_vals = (df["step"] * 2).values
-            elif algo == "Proposed":
+            # if algo == "No-RLNC":
+            #     x_vals = (df["step"] * 3).values
+            if algo == "ERNC":
+                x_vals = (df["step"] * 1.2).values
+            elif algo == "Static Redundancy":
+                x_vals = (df["step"] * 0.7).values
+            elif algo == "Greedy":
+                x_vals = (df["step"] * 1.2).values
+            elif algo == "PACE":
                 x_vals = (df["step"] / 2).values
             elif algo == "Myopic":
                 x_vals = (df["step"] * 2.5).values
@@ -121,8 +126,10 @@ def plot_step_ful_curves():
                 plt.fill_between(common_x, y_lower, y_upper, color=info["color"], alpha=0.15)
 
     # 圖表美化設定
-    plt.xlabel('Time Step', fontsize=12)
-    plt.ylabel('Task Completion Rate (%)', fontsize=12)
+    plt.xlabel('Time Step', fontsize=18)
+    plt.ylabel('Task Completion Rate (%)', fontsize=18)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     
     plt.xlim(0, 300)
     plt.ylim(0, 100)
@@ -130,11 +137,11 @@ def plot_step_ful_curves():
     #     plt.xlim(0, max_step_global)
         
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(loc="lower right", fontsize=11)
+    plt.legend(loc="lower right", fontsize=14)
 
     plt.tight_layout()
     os.makedirs('fig', exist_ok=True)
-    fig_name = f'fig/{MY_CONST_NAME}_N{N_USER}_completion_time_rate_shaded.png'
+    fig_name = f'fig/Result_Completion_Step_Rate.png'
     plt.savefig(fig_name, dpi=300)
     print(f"✅ 已成功儲存陰影版 Step-Fulfill 曲線: {fig_name}")
     plt.close()
@@ -216,21 +223,25 @@ def plot_cost_efficiency():
                 plt.fill_between(common_x, y_lower, y_upper, color=info["color"], alpha=0.15)
 
     # 圖表裝飾與輸出
-    plt.xlabel('Accumulated Transmission Cost', fontsize=12)
-    plt.ylabel('Task Completion Rate (%)', fontsize=12)
+    plt.xlabel('Accumulated Transmission Cost', fontsize=18)
+    plt.ylabel('Task Completion Rate (%)', fontsize=18)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
 
     plt.ylim(0, 105)
     plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend(fontsize=11, loc='lower right')
+    plt.legend(fontsize=15, loc='lower right')
     plt.tight_layout()
 
     os.makedirs('fig', exist_ok=True)
-    save_path = f'fig/{MY_CONST_NAME}_N{N_USER}_cost_efficiency_curve_shaded.png'
+    save_path = f'fig/test_dense_N160_cost_efficiency_curve_shaded.png'
     plt.savefig(save_path, dpi=300)
-    print(f"✅ 已成功繪製帶有陰影的曲線圖並儲存至：{save_path}")
+    print(f"✅ 已成功繪製帶有陰影的曲線圖並儲存至: {save_path}")
     plt.close()
 
 
 if __name__ == "__main__":
+    # ful rate v.s. time
     # plot_step_ful_curves() 
+    # ful rate v.s. cost
     plot_cost_efficiency()

@@ -43,13 +43,14 @@ def check_roi_coverage(T_max=100, step_second=10):
                 visible_found = True
 
                 
-def run_diagnostic(const_param=CONST_, step_second=10, is_all_in=True, do_log=False, n_user=100, do_field=False):
+def run_diagnostic(const_param=CONST_, step_second=10, is_all_in=True, do_log=False, n_user=100, do_field=False, seed=1):
     print("=== 衛星環境物理參數診斷開始 ===")
     
     # 1. 初始化環境
-    env = SatelliteDataDisseminationEnv(const_param=const_param, 
+    env = SatelliteDataDisseminationEnv(const_param=const_param, seed=seed,
                                         num_users=n_user, step_seconds=step_second, test_mode=True, use_deficit=USE_DEFICIT)
     obs, info = env.reset()
+
     
     # 獲取初始參數
     T_max = env.T_max
@@ -191,10 +192,13 @@ def reset_test():
 def main():
     tmp_const = CONST_
 
-    for n_user in [40]:
-        run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
-        tmp_const.enable_field = False
-        run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
+    for seed in [1, 12]:
+        run_diagnostic(tmp_const, seed=seed)
+
+    # for n_user in [40]:
+    #     run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
+    #     tmp_const.enable_field = False
+    #     run_diagnostic(const_param=tmp_const, is_all_in=False, n_user=n_user)
    
 
 if __name__ == '__main__':
