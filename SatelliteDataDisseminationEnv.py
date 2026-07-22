@@ -202,7 +202,10 @@ class SatelliteDataDisseminationEnv(ParallelEnv):
 
         for agent_name in self.agents:
             i = self.constellation.get_id_by_name(agent_name)
-            raw_action = actions[agent_name]
+            # raw_action = actions[agent_name]
+            raw_action = actions.get(agent_name, np.zeros(self.M + 1, dtype=np.float32))
+            if agent_name not in actions:
+                print(f"[SatelliteDD] Warning: {agent_name} not found in actions")
 
             # ==================================================
             # 【關鍵修正】：1. 先看清環境，計算出哪幾條路徑活著 (Action Mask)

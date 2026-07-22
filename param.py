@@ -16,29 +16,20 @@ TEST_NO_ISL_ =     Const_Param(p=3, s=10,  t_max=200,  n_neighbor=0) # p = 13, s
 TEST_NO_RLNC_ =     Const_Param(p=3, s=10, t_max=300,  enable_RLNC=False) # time is too long...
 TEST_FIELD =         Const_Param(p=3, s=10, t_max=200,  enable_field=True, q=2) 
 
-# TEST2_ =        Const_Param(p=6, s=10,  t_max=90, ) # fail to converge..
-# TEST3_ =        Const_Param(p=3, s=10,  t_max=90, ) # MAPPO failed 200 iter
 TEST4_ =        Const_Param(p=6, s=10,  t_max=90, ) # p = 13, s = 10
 TEST4_NO_ISL_ =        Const_Param(p=6, s=10,  t_max=90,  n_neighbor=0)
 TEST4_NO_RLNC_ =        Const_Param(p=6, s=10,  t_max=300,  enable_RLNC=False)
-# TEST_H550_ =   Const_Param(alt=550, inc=53, p=3, s=22,  t_max=90, ) # MAPPO train better
-TEST_DENSE_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300, )
-TEST_DENSE_W4_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300,  Tw=4) 
-TEST_DENSE_W8_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=200,  Tw=8) 
-TEST_DENSE_W10_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=200,  Tw=10) 
-TEST_DENSE_NO_ISL_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=500,  n_neighbor=0)
+TEST_DENSE_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=600, )
+TEST_DENSE_W4_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=600,  Tw=4) 
+TEST_DENSE_W8_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=600,  Tw=8) 
+TEST_DENSE_W10_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=600,  Tw=10) 
+TEST_DENSE_NO_ISL_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=1000,  n_neighbor=0)
 TEST_DENSE_NO_RLNC_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300,  enable_RLNC=False)
 TEST_DENSE_FIELD_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300,  enable_field=True, q=2)
 TEST_DENSE_FIELD_Q4_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=300,  enable_field=True, q=4)
 # TEST_GRID_ =   Const_Param(alt=550, inc=53, p=3, s=22,  t_max=90,  grid_scale=15) # MAPPO train better
 
 TEST_ERASURE_ =   Const_Param(alt=550, inc=53, p=10, s=22,  t_max=90) # dl_cp should smaller, e = 0.1, lambda = 0.01
-TEST_DEFICIT_     =  Const_Param(p=18, s=5,  t_max=90, )
-TEST_DEFICIT_W3_  =  Const_Param(p=18, s=5,  t_max=90,  Tw=3)
-TEST_DEFICIT_W4_  =  Const_Param(p=18, s=5,  t_max=90,  Tw=4)
-
-TEST_DEFICIT_FUL_     =  Const_Param(p=3, s=5,  t_max=90, )
-TEST_DEFICIT_FUL_W3_  =  Const_Param(p=3, s=5,  t_max=90,  Tw=3)
 
 MY_CONST_NAME = "test_dense"
 
@@ -46,8 +37,8 @@ MY_CONST_NAME = "test_dense"
 PARETO_CONFIGS = [
     # {"omega_t": 1.0, "omega_c": 0.0}, # 極端求快
     # {"omega_t": 0.9, "omega_c": 0.1},   # dense
-    {"omega_t": 0.6, "omega_c": 0.4}, # Exp1. setting
-    # {"omega_t": 0.8, "omega_c": 0.2},  # dense settings
+    {"omega_t": 0.8, "omega_c": 0.2},  # dense settings (TW)
+    # {"omega_t": 0.6, "omega_c": 0.4}, # Exp1. setting
     # {"omega_t": 0.7, "omega_c": 0.3},
     # {"omega_t": 0.95, "omega_c": 0.05}, 
     # {"omega_t": 0.85, "omega_c": 0.15}, 
@@ -71,17 +62,22 @@ DO_TEST_LOG = True
 ###########################################
 
 # TEST_MODES = ["MAPPO"] # "MAPPO" , "MYOTIC"
-TEST_MODES = ["ERNC", "GREEDY", "STATIC-R"] # "GREEDY", "ERNC" , "STATIC_R"
-USER_NUMBERS = [80]
+TEST_MODES = ["MAPPO"] # "GREEDY", "ERNC" , "STATIC_R"
+USER_NUMBERS = [1, 40, 80, 120, 160]
 ERASURES = [0.1] #[0.1, 0.2, 0.3, 0.4]
-THETA_THES = [15, 30] # 20, 25, 30]
+THETA_THES = [15]
 MAX_BUFS = [30] # [5, 10, 15, 20, 25, 30]
 TARGET_KS = [30] #[10, 20, 30]
 
 # set to True if checkpoint it stored in checkpoints/WTX_WCX
 TEST_PARETO = True
 
-SEED_LIST = [1, 12, 123, 1234, 12345]
+SEED_LIST = [
+    1, 12, 123, 1234, 12345 #1235, 777, 1, 12, 1234
+] 
+# general: 123,     1234, 1235,1236, 1237
+# X 777, 30, 222
+# TW candidate: 222, 777
 #######################################################
 if IS_MYOTIC:       _path = f"./satellite_{MY_CONST_NAME}_myotic_checkpoints/" # f"./satellite_test_dense_myotic_checkpoints/" | None
 else:               _path = f"./satellite_{MY_CONST_NAME}_checkpoints/"
@@ -127,11 +123,6 @@ elif MY_CONST_NAME == 'test_dense_no_rlnc':         CONST_PARAM = TEST_DENSE_NO_
 elif MY_CONST_NAME == 'test_dense_field':         CONST_PARAM = TEST_DENSE_FIELD_
 elif MY_CONST_NAME == 'test_dense_field_q4':      CONST_PARAM = TEST_DENSE_FIELD_Q4_
 elif MY_CONST_NAME == 'test_erasure':         CONST_PARAM = TEST_ERASURE_
-elif MY_CONST_NAME == 'test_deficit':         CONST_PARAM = TEST_DEFICIT_
-elif MY_CONST_NAME == 'test_deficit_w3':         CONST_PARAM = TEST_DEFICIT_W3_
-elif MY_CONST_NAME == 'test_deficit_w4':         CONST_PARAM = TEST_DEFICIT_W4_
-elif MY_CONST_NAME == 'test_deficit_ful':         CONST_PARAM = TEST_DEFICIT_FUL_
-elif MY_CONST_NAME == 'test_deficit_ful_w3':         CONST_PARAM = TEST_DEFICIT_FUL_W3_
 elif MY_CONST_NAME == 'test':               CONST_PARAM = TEST_
 else:                                raise NameError(f"Not known Const Name: {MY_CONST_NAME}")
 
@@ -149,7 +140,7 @@ ALGO_TILTE = ["No-RLNC", "No-ISL", "Myopic", "PACE", "Greedy", "ERNC", "Static R
 # COLORS = ["#7a7a7a", "#b81dff", "#b41f21", '#1f77b4', "#070400", '#ff7f0e', '#2ca02c', "#f8f012"] 
 # LINESTYLES = ['dotted', 'dotted', 'dashed', 'solid', 'dashdot', 'dashdot', 'dashed', 'solid']
 # # ALGO_TILTE = ["Myopic", "PACE", "PACE (Tw = 3)", "PACE (Tw = 4)"]
-# ALGO_TILTE = ["PACE", "PACE (Tw = 4)", "PACE (Tw = 8)", "PACE (Tw = 10)"]
+# ALGO_TILTE = ["PACE (Tw = 2)", "PACE (Tw = 4)", "PACE (Tw = 8)", "PACE (Tw = 10)"]
 
 
 # Thm 1

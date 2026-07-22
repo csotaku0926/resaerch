@@ -142,7 +142,7 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
         print(f"📦 物理極限 Fulfill : {final_fulfill_rate:.4f} (總送達 {total_delivered:.1f} / {U * TARGET_K} 封包)")
         
         # 極限模式下，完工時間通常是跑到最後一步
-        final_comp_time = T * env.step_seconds
+        final_comp_time = T
         era = env.erasure
         final_erasure = era # 請依照你測試的掉包率修改
         
@@ -152,7 +152,7 @@ def compute_offline_lower_bound(env:SatelliteDataDisseminationEnv):
 
         seed = env.seed
         n_user = env.num_users
-        log_file = f"{dir_name}/OFFLINE_s{seed}_test_log.csv"
+        log_file = f"{dir_name}/OFFLINE_s{seed}_thes_test_log.csv"
         file_exists = os.path.isfile(log_file)
         
         df = pd.DataFrame([{
@@ -225,26 +225,6 @@ def run_single_task(seed, n_user, era):
     compute_offline_lower_bound(env)
 
 if __name__ == "__main__":
-    ERASURES = [0.1]
-    USER_NUMBERS = [1]
-
-    # 建立任務清單
-    # tasks = []
-    # for seed in SEED_LIST:
-    #     for n_user in USER_NUMBERS:
-    #         for era in ERASURES:
-    #             tasks.append((seed, n_user, era))
-
-    # # 限制「同時執行」的最大進程數，避免瞬間把 RAM 抽乾
-    # # 如果你的電腦有 32GB RAM，建議設 3 或 4；如果只有 16GB，設 2
-    # MAX_CONCURRENT_WORKERS = 3 
-    
-    # print(f"🚀 開始平行執行 {len(tasks)} 個任務，最大併發數: {MAX_CONCURRENT_WORKERS}")
-    
-    # with multiprocessing.Pool(processes=MAX_CONCURRENT_WORKERS) as pool:
-    #     pool.starmap(run_single_task, tasks)
-    
-    # print("✅ 所有排程計算完畢！")
 
     for seed in SEED_LIST:
         for n_user in USER_NUMBERS:

@@ -30,12 +30,8 @@ USER_MAP = {
 # ==========================================
 # 💡 定義你的 Seeds 與參數
 # ==========================================
-SEEDS = [1, 12, 123, 1234]  # 你的 4 個 seed
 OMEGA_T = "0.6"             
 
-# test-dense
-# ALGO_TILTE = ["PACE (Tw=2)", "Proposed (Tw=4)", "Proposed (Tw=8)", "Proposed (Tw=10)"]
-# ALGO_TILTE = ["Offline"]
 
 # ALGO_PREFIX = [
 #     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
@@ -48,37 +44,41 @@ OMEGA_T = "0.6"
 #     "satellite_test_dense_checkpoints/OFFLINE",
 # ]
 
-# # starlink
-# ALGO_PREFIX = [
-#     "satellite_starlink_no_rlnc_checkpoints/MAPPO",
-#     "satellite_starlink_no_isl_checkpoints/MAPPO",
-#     "satellite_starlink_checkpoints/MYOTIC",
-#     "satellite_starlink_checkpoints/MAPPO",
-#     "satellite_starlink_checkpoints/GREEDY",
-#     "satellite_starlink_checkpoints/ERNC",
-#     "satellite_starlink_checkpoints/STATIC_R",
-#     # "satellite_starlink_checkpoints/OFFLINE",
-# ]
+# starlink
+ALGO_PREFIX = [
+    "satellite_starlink_no_rlnc_checkpoints/MAPPO",
+    "satellite_starlink_no_isl_checkpoints/MAPPO",
+    "satellite_starlink_checkpoints/MYOTIC",
+    # "satellite_starlink_checkpoints/MAPPO",
+    "MAPPO",
+    "satellite_starlink_checkpoints/GREEDY",
+    "satellite_starlink_checkpoints/ERNC",
+    "satellite_starlink_checkpoints/STATIC_R",
+    # "satellite_starlink_checkpoints/OFFLINE",
+    "OFFLINE"
+]
 
 # amazon
 # ALGO_PREFIX = [
 #     "satellite_amazon_no_rlnc_checkpoints/MAPPO",
 #     "satellite_amazon_no_isl_checkpoints/MAPPO",
 #     "satellite_amazon_checkpoints/MYOTIC",
-#     "satellite_amazon_checkpoints/MAPPO",
+#     # "satellite_amazon_checkpoints/MAPPO",
+#     "MAPPO",
 #     "satellite_amazon_checkpoints/GREEDY",
 #     "satellite_amazon_checkpoints/ERNC",
 #     "satellite_amazon_checkpoints/STATIC_R",
-#     "satellite_amazon_checkpoints/OFFLINE",
+#     # "satellite_amazon_checkpoints/OFFLINE",
+#     "OFFLINE"
 # ]
 
 # Tw
-ALGO_PREFIX = [
-    "satellite_test_dense_checkpoints/MAPPO",
-    "satellite_test_dense_w4_checkpoints/MAPPO",
-    "satellite_test_dense_w8_checkpoints/MAPPO",
-    "satellite_test_dense_w10_checkpoints/MAPPO",
-]
+# ALGO_PREFIX = [
+#     "satellite_test_dense_checkpoints/MAPPO",
+#     "satellite_test_dense_w4_checkpoints/MAPPO",
+#     "satellite_test_dense_w8_checkpoints/MAPPO",
+#     "satellite_test_dense_w10_checkpoints/MAPPO",
+# ]
 
 ALGO_CONFIG = {}
 
@@ -106,7 +106,7 @@ def plot_NUser_shaded():
         tx_costs_per_user = {u: [] for u in TRUE_USER_NUMBERS}
 
         # 遍歷所有 seed，讀取對應的 test_log.csv
-        for seed in SEEDS:
+        for seed in SEED_LIST:
             # 依照你上傳的檔案名稱格式：MAPPO_s1234_test_log.csv
             file_path = f"{prefix}_s{seed}_test_log.csv"
             
@@ -226,6 +226,7 @@ def plot_NUser_shaded():
     plt.close()
 
 def plot_NUser_shaded_starlink():
+    summary_data = {}
     # ==========================================
     # 2. 讀取 test_log.csv 並計算 95% 信賴區間
     # ==========================================
@@ -238,22 +239,25 @@ def plot_NUser_shaded_starlink():
         tx_costs_per_user = {u: [] for u in TRUE_USER_NUMBERS}
 
         # 遍歷所有 seed，讀取對應的 test_log.csv
-        for seed in SEEDS:
+        for seed in SEED_LIST:
             # 依照你上傳的檔案名稱格式：MAPPO_s1234_test_log.csv
-            file_path = f"{prefix}_s{seed}_test_log.csv"
-            
-            # 若演算法沒有分 seed (如 Baseline)，提供 Fallback 去找沒有 _s 的檔案
-            if not os.path.exists(file_path):
-                file_path = f"{prefix}_test_log.csv"
-                print(f"[plot_NUser] trying {file_path} instead...")
+            if algo_label == "PACE" or algo_label == "Offline":
+                file_path = f"{prefix}_s{seed}_test_log_SL.csv"
+            else:
+                file_path = f"{prefix}_s{seed}_test_log.csv"
+                
+                # 若演算法沒有分 seed (如 Baseline)，提供 Fallback 去找沒有 _s 的檔案
+                if not os.path.exists(file_path):
+                    file_path = f"{prefix}_test_log.csv"
+                    print(f"[plot_NUser] trying {file_path} instead...")
 
             if os.path.exists(file_path):
-                print(file_path)
+                # print(file_path)
                 df = pd.read_csv(file_path)
                 # 遍歷每一行，把 Tx_Cost 塞進對應的 User_Num 陣列裡
                 for _, row in df.iterrows():
                     # u = int(row['User_Num'])
-                    print(row)
+                    # print(row)
                     u = int(row['User_Num'])
                     
                     if u in tx_costs_per_user:
@@ -268,14 +272,14 @@ def plot_NUser_shaded_starlink():
                         else:
                             tx_costs_per_user[u].append(cost / ful)
             
-                    if u == 160 and (algo_label == "Proposed" or algo_label == "Offline"):
-                        print(algo_label, np.mean(tx_costs_per_user[u]))
+                    if u == 160 and (algo_label == "PACE" or algo_label == "Offline"):
+                        print(algo_label, tx_costs_per_user[u])
             else:
                 print(f"⚠️ 找不到檔案: {file_path}, skipping")
                 break
 
         # 準備畫圖用的陣列
-        print(tx_costs_per_user)
+        # print(tx_costs_per_user)
         x_users_plot = []
         y_mean_Tx = []
         y_margin_Tx = []
@@ -298,6 +302,9 @@ def plot_NUser_shaded_starlink():
                     # 這樣陰影大小會只剩下原本 95% CI 的三分之一！
                     se = np.std(costs, ddof=1) / np.sqrt(n_seeds)
                     y_margin_Tx.append(se)
+
+        # 僅在此處紀錄您原本計算好的 mean_val，不改變劃線與數據處理
+        summary_data[algo_label] = dict(zip(x_users_plot, y_mean_Tx))
 
         # ==========================================
         # 3. 畫出實線與 95% CI 陰影帶
@@ -350,10 +357,44 @@ def plot_NUser_shaded_starlink():
     os.makedirs('fig', exist_ok=True)
     save_path = f'fig/Result_starlink_TxCost_vs_Users.png'
     plt.savefig(save_path, dpi=300)
-    print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至：{save_path}")
+    print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至: {save_path}")
     plt.close()
 
+        # ==========================================
+    # 5. 印出指定的 6 種演算法成本與 PACE 相差倍數表格
+    # ==========================================
+    target_algos = ["No-RLNC", "No-ISL", "PACE", "Greedy", "Myopic", "ERNC", 'Static Redundancy']
+    target_users = [80, 120, 160]
+
+    pace_label = "PACE" 
+
+    table_rows = []
+    for algo in target_algos:
+        if algo not in summary_data:
+            continue
+        row = {"Algorithm": algo}
+        for u in target_users:
+            cost = summary_data[algo].get(u, np.nan)
+            row[f"User {u} Tx Cost"] = f"{cost:,.2f}" if not np.isnan(cost) else "N/A"
+            
+            if pace_label and pace_label in summary_data and u in summary_data[pace_label]:
+                pace_cost = summary_data[pace_label][u]
+                if not np.isnan(cost) and not np.isnan(pace_cost) and pace_cost > 0:
+                    ratio = cost / pace_cost
+                    row[f"User {u} Ratio (vs PACE)"] = f"{ratio:.2f}x"
+                else:
+                    row[f"User {u} Ratio (vs PACE)"] = "N/A"
+            else:
+                row[f"User {u} Ratio (vs PACE)"] = "N/A"
+        table_rows.append(row)
+
+    df_table = pd.DataFrame(table_rows)
+    df_table.to_csv("starlink_tx_cost_comparison.csv", index=False)
+
 def plot_NUser_shaded_amazon():
+    # 建立字典紀錄各演算法計算出的平均 Tx Cost，完全不改動原本的 for 迴圈
+    summary_data = {}
+    
     # ==========================================
     # 2. 讀取 test_log.csv 並計算 95% 信賴區間
     # ==========================================
@@ -366,22 +407,25 @@ def plot_NUser_shaded_amazon():
         tx_costs_per_user = {u: [] for u in TRUE_USER_NUMBERS}
 
         # 遍歷所有 seed，讀取對應的 test_log.csv
-        for seed in SEEDS:
-            # 依照你上傳的檔案名稱格式：MAPPO_s1234_test_log.csv
-            file_path = f"{prefix}_s{seed}_test_log.csv"
-            
-            # 若演算法沒有分 seed (如 Baseline)，提供 Fallback 去找沒有 _s 的檔案
-            if not os.path.exists(file_path):
-                file_path = f"{prefix}_test_log.csv"
-                print(f"[plot_NUser] trying {file_path} instead...")
+        for seed in SEED_LIST:
+            if algo_label == "PACE" or algo_label == "Offline":
+                file_path = f"{prefix}_s{seed}_test_log_AM.csv"
+            else:
+                # 依照你上傳的檔案名稱格式：MAPPO_s1234_test_log.csv
+                file_path = f"{prefix}_s{seed}_test_log.csv"
+                
+                # 若演算法沒有分 seed (如 Baseline)，提供 Fallback 去找沒有 _s 的檔案
+                if not os.path.exists(file_path):
+                    file_path = f"{prefix}_test_log.csv"
+                    print(f"[plot_NUser] trying {file_path} instead...")
 
             if os.path.exists(file_path):
-                print(file_path)
+                # print(file_path)
                 df = pd.read_csv(file_path)
                 # 遍歷每一行，把 Tx_Cost 塞進對應的 User_Num 陣列裡
                 for _, row in df.iterrows():
                     # u = int(row['User_Num'])
-                    print(row)
+                    # print(row)
                     u = int(row['User_Num'])
                     
                     if u in tx_costs_per_user:
@@ -403,7 +447,6 @@ def plot_NUser_shaded_amazon():
                 break
 
         # 準備畫圖用的陣列
-        print(tx_costs_per_user)
         x_users_plot = []
         y_mean_Tx = []
         y_margin_Tx = []
@@ -427,6 +470,9 @@ def plot_NUser_shaded_amazon():
                     se = np.std(costs, ddof=1) / np.sqrt(n_seeds)
                     y_margin_Tx.append(se)
 
+        # 僅在此處紀錄您原本計算好的 mean_val，不改變劃線與數據處理
+        summary_data[algo_label] = dict(zip(x_users_plot, y_mean_Tx))
+        # print(algo_label, y_mean_Tx)
         # ==========================================
         # 3. 畫出實線與 95% CI 陰影帶
         # ==========================================
@@ -478,8 +524,41 @@ def plot_NUser_shaded_amazon():
     os.makedirs('fig', exist_ok=True)
     save_path = f'fig/Result_amazon_TxCost_vs_Users.png'
     plt.savefig(save_path, dpi=300)
-    print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至：{save_path}")
+    print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至: {save_path}")
     plt.close()
+
+    # ==========================================
+    # 5. 印出指定的 6 種演算法成本與 PACE 相差倍數表格
+    # ==========================================
+    target_algos = ["No-RLNC", "No-ISL", "PACE", "Greedy", "Myopic", "ERNC", "Static Redundancy"]
+    target_users = [80, 120, 160]
+
+    pace_label = "PACE" 
+
+    table_rows = []
+    for algo in target_algos:
+        if algo not in summary_data:
+            print(f"{algo} missing")
+            continue
+        row = {"Algorithm": algo}
+        for u in target_users:
+            cost = summary_data[algo].get(u, np.nan)
+            row[f"User {u} Tx Cost"] = f"{cost:,.2f}" if not np.isnan(cost) else "N/A"
+            
+            if pace_label and pace_label in summary_data and u in summary_data[pace_label]:
+                pace_cost = summary_data[pace_label][u]
+                if not np.isnan(cost) and not np.isnan(pace_cost) and pace_cost > 0:
+                    ratio = cost / pace_cost
+                    row[f"User {u} Ratio (vs PACE)"] = f"{ratio:.2f}x"
+                else:
+                    row[f"User {u} Ratio (vs PACE)"] = "N/A"
+            else:
+                row[f"User {u} Ratio (vs PACE)"] = "N/A"
+        table_rows.append(row)
+
+    df_table = pd.DataFrame(table_rows)
+    print(df_table)
+    df_table.to_csv("amazon_tx_comparison.csv", index=False)
 
 def plot_NUser_shaded_TW():
     # ==========================================
@@ -494,7 +573,7 @@ def plot_NUser_shaded_TW():
         tx_costs_per_user = {u: [] for u in TRUE_USER_NUMBERS}
 
         # 遍歷所有 seed，讀取對應的 test_log.csv
-        for seed in SEEDS:
+        for seed in SEED_LIST:
             # 依照你上傳的檔案名稱格式：MAPPO_s1234_test_log.csv
             file_path = f"{prefix}_s{seed}_test_log.csv"
             
@@ -504,12 +583,10 @@ def plot_NUser_shaded_TW():
                 print(f"[plot_NUser] trying {file_path} instead...")
 
             if os.path.exists(file_path):
-                print(file_path)
                 df = pd.read_csv(file_path)
                 # 遍歷每一行，把 Tx_Cost 塞進對應的 User_Num 陣列裡
                 for _, row in df.iterrows():
                     # u = int(row['User_Num'])
-                    print(row)
                     u = int(row['User_Num'])
                     
                     if u in TRUE_USER_NUMBERS: #USER_MAP.keys():
@@ -518,33 +595,13 @@ def plot_NUser_shaded_TW():
                         time = row['Comp_Time']
                         ful = row['Fulfill']
 
-                        # if algo_label == "Myopic":
-                        #     tx_costs_per_user[u].append(cost / ful * 2.1)
-                        #     if u == 200:
-                        #         tx_costs_per_user[u].append(cost / ful * 0.75)
-                        # elif algo_label == "PACE":
-                        #     tx_costs_per_user[u].append(cost / ful * 2)
-                        #     if u == 400:
-                        #         tx_costs_per_user[u].append(cost / ful * 3)
-                        # elif algo_label == "PACE (Tw = 3)":
-                        #     tx_costs_per_user[u].append(cost / ful * 1.4)
-                        #     if u >= 300:
-                        #         tx_costs_per_user[u].append(cost / ful * 2)
-                        # elif algo_label == "PACE (Tw = 4)":
-                        #     tx_costs_per_user[u].append(cost / ful * 1.3)
-                        #     if u == 200: tx_costs_per_user[u].append(cost / ful * 1.0)
-                        #     if u == 300: tx_costs_per_user[u].append(cost / ful * 2.0)
-                        #     if u == 400: tx_costs_per_user[u].append(cost / ful * 2.2)
-                        # else:
                         tx_costs_per_user[u].append(cost / ful)
             
             else:
                 print(f"⚠️ 找不到檔案: {file_path}, skipping")
                 break
 
-        # 準備畫圖用的陣列
-        print(tx_costs_per_user)
-        
+        # 準備畫圖用的陣列        
         x_users_plot = []
         y_mean_Tx = []
         y_margin_Tx = []
@@ -617,7 +674,7 @@ def plot_NUser_shaded_TW():
     plt.tight_layout()
 
     os.makedirs('fig', exist_ok=True)
-    save_path = 'Result_TW_TxCost_vs_Users.png'
+    save_path = 'fig/Result_TW_TxCost_vs_Users.pdf'
     # save_path = f'fig/Result_test_deficit_w4_Tx_Cost_vs_User.png'
     plt.savefig(save_path, dpi=300)
     print(f"✅ 已成功繪製帶有 95% 信賴區間的圖表並儲存至 : {save_path}")
@@ -768,7 +825,7 @@ def plot_CompTime_shaded():
     # plt.ylabel('Decoding Delay', fontsize=12)
     plt.ylabel('Completion Time', fontsize=18)
 
-    plt.xlim(ERASURES[0], ERASURES[-1])
+    # plt.xlim(ERASURES[0], ERASURES[-1])
     # plt.ylim(0, 15e4)
 
     # plt.xticks(TRUE_USER_NUMBERS)
@@ -789,5 +846,6 @@ def plot_CompTime_shaded():
 
 
 if __name__ == '__main__':
-    plot_NUser_shaded_TW()
+    plot_NUser_shaded_starlink()
+    # plot_NUser_shaded_amazon()
     # plot_CompTime_shaded()

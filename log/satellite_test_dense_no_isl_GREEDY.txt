@@ -1,0 +1,2 @@
+
+[GREEDY] ══ erasure=0.1 theta=15 ══ n_users=80  ══ seed=40 ══ buf=30 == k=30══

@@ -13,7 +13,8 @@ from param import *
 # ==========================================
 DIR_NAME = f"satellite_{MY_CONST_NAME}_checkpoints/"
 
-SEEDS = [1, 12, 123]  
+SEEDS = [10, 12, 1234, 1235, 777]  
+SEEDS = [1, 12, 123]
 OMEGA_T = "0.6"         
 N_USER = 160    
 
@@ -22,11 +23,13 @@ ALGO_PREFIX = [
     "satellite_test_dense_no_rlnc_checkpoints/MAPPO",
     "satellite_test_dense_no_isl_checkpoints/MAPPO",
     "satellite_test_dense_checkpoints/MYOTIC",
+    # "MAPPO",
     "satellite_test_dense_checkpoints/MAPPO",
     "satellite_test_dense_checkpoints/GREEDY",
     "satellite_test_dense_checkpoints/ERNC",
     "satellite_test_dense_checkpoints/STATIC_R",
     "satellite_test_dense_checkpoints/OFFLINE",
+    # "OFFLINE",
 ]
 
 ALGO_CONFIG = {}
@@ -44,6 +47,13 @@ def plot_step_ful_curves():
     plt.figure(figsize=(10, 6))
     max_step_global = 0
 
+# 指定要計算時間步的 6 個演算法與目標 Fulfill Rate (%)
+    target_algos = ["No-RLNC", "No-ISL", "PACE", "Greedy", "Myopic", "ERNC"]
+    targets = [80, 90, 100]
+    
+    # 紀錄各演算法達到 80%, 90%, 100% Fulfill Rate 所需的時間步 (Time Step)
+    step_summary = {algo: {t: [] for t in targets} for algo in target_algos}
+
     for algo, info in ALGO_CONFIG.items():
         all_x = []
         all_y = []
@@ -54,7 +64,9 @@ def plot_step_ful_curves():
             if algo == "No-RLNC":
                 file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t0.5_s{seed}_curve.csv")
             elif algo == "Offline":
-                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_s{seed}_curve.csv")
+                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_s{seed}_curve.csv") #_resampled.csv")
+            elif algo == "PACE":
+                file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv") #_resampled.csv")
             else:
                 file_name = os.path.join(info["prefix"] + f"_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv")
 
@@ -68,6 +80,7 @@ def plot_step_ful_curves():
 
             x_vals = df['step'].values
 
+            # time step
             # if algo == "No-RLNC":
             #     x_vals = (df["step"] * 3).values
             if algo == "ERNC":
@@ -80,7 +93,7 @@ def plot_step_ful_curves():
                 x_vals = (df["step"] / 2).values
             elif algo == "Myopic":
                 x_vals = (df["step"] * 2.5).values
-            
+
             # 正規化 Y 軸 (動態拉到 100%)
             max_f = df["fulfill"].max()
             if max_f > 0:
@@ -98,32 +111,53 @@ def plot_step_ful_curves():
             max_step_global = max(max_step_global, local_max_x)
 
         # 進行插值與計算陰影
-        if len(all_x) > 0:
-            # 建立統一的 Time Step 軸
-            common_x = np.linspace(0, local_max_x, 300)
-            interp_y_list = []
+        if len(all_x) == 0: continue
 
-            for x_arr, y_arr in zip(all_x, all_y):
-                # 【關鍵】：bounds_error=False, fill_value=(y_arr[0], y_arr[-1]) 
-                # 這樣提早完賽的 Seed 會自動用最後的 100% 往右邊平移補滿，完美解決不同種子步數不同的問題
-                f = interp1d(x_arr, y_arr, kind='linear', bounds_error=False, fill_value=(y_arr[0], y_arr[-1]))
-                interp_y_list.append(f(common_x))
+        # 建立統一的 Time Step 軸
+        common_x = np.linspace(0, local_max_x, 300)
+        interp_y_list = []
 
-            interp_y_matrix = np.array(interp_y_list)
-            n_seeds = len(interp_y_list)
+        for x_arr, y_arr in zip(all_x, all_y):
+            # 【關鍵】：bounds_error=False, fill_value=(y_arr[0], y_arr[-1]) 
+            # 這樣提早完賽的 Seed 會自動用最後的 100% 往右邊平移補滿，完美解決不同種子步數不同的問題
+            f = interp1d(x_arr, y_arr, kind='linear', bounds_error=False, fill_value=(y_arr[0], y_arr[-1]))
+            interp_y_list.append(f(common_x))
 
-            mean_y = np.mean(interp_y_matrix, axis=0)
+        interp_y_matrix = np.array(interp_y_list)
+        n_seeds = len(interp_y_list)
+
+        mean_y = np.mean(interp_y_matrix, axis=0)
+
+        print(algo, common_x[-1], 1 - 100 / common_x[-1])
+        
+        plt.plot(common_x, mean_y, color=info["color"], label=f"{algo}", linewidth=2.5, linestyle=info["linestyle"])
+        
+        # 只要有效 seed 數量大於 1，就畫出標準誤(SE)陰影
+        if n_seeds > 1:
+            se_y = np.std(interp_y_matrix, ddof=1, axis=0) / np.sqrt(n_seeds)
             
-            plt.plot(common_x, mean_y, color=info["color"], label=f"{algo}", linewidth=2.5, linestyle=info["linestyle"])
-            
-            # 只要有效 seed 數量大於 1，就畫出標準誤(SE)陰影
-            if n_seeds > 1:
-                se_y = np.std(interp_y_matrix, ddof=1, axis=0) / np.sqrt(n_seeds)
-                
-                y_lower = np.clip(mean_y - se_y, 0, 100)
-                y_upper = np.clip(mean_y + se_y, 0, 100)
+            y_lower = np.clip(mean_y - se_y, 0, 100)
+            y_upper = np.clip(mean_y + se_y, 0, 100)
 
-                plt.fill_between(common_x, y_lower, y_upper, color=info["color"], alpha=0.15)
+            plt.fill_between(common_x, y_lower, y_upper, color=info["color"], alpha=0.15)
+
+        # 4. 針對六種目標方法，各自由其 mean_y 曲線計算達到 80%, 90%, 100% fulfill rate 所需的 Time Step
+        if algo in target_algos:
+            y_sort_idx = np.argsort(mean_y)
+            mean_y_sorted = mean_y[y_sort_idx]
+            common_x_sorted = common_x[y_sort_idx]
+
+            y_u, u_idx = np.unique(mean_y_sorted, return_index=True)
+            x_u = common_x_sorted[u_idx]
+
+            algo_steps = {}
+            for target in targets:
+                if target <= y_u[-1]:
+                    step_val = float(np.interp(target, y_u, x_u))
+                    algo_steps[f"{target}% Fulfill Step"] = round(step_val, 2)
+                else:
+                    algo_steps[f"{target}% Fulfill Step"] = "N/A"
+            step_summary[algo] = algo_steps
 
     # 圖表美化設定
     plt.xlabel('Time Step', fontsize=18)
@@ -146,6 +180,25 @@ def plot_step_ful_curves():
     print(f"✅ 已成功儲存陰影版 Step-Fulfill 曲線: {fig_name}")
     plt.close()
 
+    # --- 整理與輸出 Time Step 表格 ---
+    table_rows = []
+    for algo in target_algos:
+        if algo in step_summary:
+            row = {"Algorithm": algo}
+            row.update(step_summary[algo])
+            table_rows.append(row)
+
+    df_step_table = pd.DataFrame(table_rows)
+
+    print("\n" + "="*60)
+    print("📊 各演算法達到 80%, 90%, 100% Fulfill Rate 所需之平均時間步 (Time Step)")
+    print("="*60)
+    print(df_step_table)
+    print("="*60 + "\n")
+
+    df_step_table.to_csv("fig/Fulfill_Step_Summary_Table.csv", index=False)
+
+
 def plot_cost_efficiency():
     plt.figure(figsize=(10, 6))
     max_tx_all = 0
@@ -160,7 +213,9 @@ def plot_cost_efficiency():
             if algo == "No-RLNC":
                 file_path = f"{info['prefix']}_0.1_{N_USER}_t0.5_s{seed}_curve.csv"
             elif algo == "Offline":
-                file_path = f"{info['prefix']}_0.1_{N_USER}_s{seed}_curve.csv"
+                file_path = f"{info['prefix']}_0.1_{N_USER}_s{seed}_curve_resampled.csv"
+            elif algo == "PACE":
+                file_path = f"{info['prefix']}_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve_resampled.csv"
             else:
                 file_path = f"{info['prefix']}_0.1_{N_USER}_t{OMEGA_T}_s{seed}_curve.csv"
             
@@ -242,6 +297,6 @@ def plot_cost_efficiency():
 
 if __name__ == "__main__":
     # ful rate v.s. time
-    # plot_step_ful_curves() 
+    plot_step_ful_curves() 
     # ful rate v.s. cost
-    plot_cost_efficiency()
+    # plot_cost_efficiency()

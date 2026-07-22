@@ -26,7 +26,7 @@ from param import *
 # ── 執行設定 ──────────────────────────────────────
 
 NUM_EPISODES = 1
-T_MAX = 300 #CONST_PARAM.t_max
+T_MAX = CONST_PARAM.t_max
 print(f"[參數確認]")
 print(f"- 衛星 const: {MY_CONST_NAME}")
 print(f"- 最大步數 (T_max): {T_MAX}")
@@ -274,6 +274,14 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                     current_time = current_skyfield_time(actual_env)
                     actions = {}
 
+                    # === 加上這行保護 ===
+                    if len(obs) == 0:
+                        # obs 空了不代表結束，我們直接給空字典讓 env.step() 推進時間步
+                        obs, _, terminations, truncations, infos = env.step(actions)
+                        done = terminations.get("__all__", False) or truncations.get("__all__", False)
+                        continue
+                    # ===================
+
                     for agent_id, agent_obs in obs.items():
                         real_id = actual_env.constellation.get_id_by_name(agent_id)
 
@@ -317,8 +325,10 @@ def run_mode(mode, user_numbers, num_episodes, algo=None, write_log=True, write_
                         final_tx_cost = infos[first].get("tx_cost", 0.0)
                         final_comp_time = infos[first].get("time", 0.0)
 
-                    done = (terminations.get("__all__", False) or
-                            truncations.get("__all__", False))
+                    done = (
+                        terminations.get("__all__", False) or
+                        truncations.get("__all__", False) 
+                    )
                     
                 # 【新增 4】：如果這是最困難的一局 (例如 400 user)，就把曲線存起來
                 if write_curve and (len(final_curve) == 0 or (

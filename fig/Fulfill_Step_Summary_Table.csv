@@ -1,0 +1,7 @@
+Algorithm,80% Fulfill Step,90% Fulfill Step,100% Fulfill Step
+No-RLNC,95.46,135.18,139.13
+No-ISL,34.33,44.3,191.3
+PACE,44.03,46.62,105.4
+Greedy,37.82,52.51,193.75
+Myopic,72.43,80.8,167.73
+ERNC,40.15,49.1,172.17
